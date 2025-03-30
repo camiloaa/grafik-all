@@ -3,6 +3,9 @@ GraphQL basic node
 """
 
 
+from typing import Any, Optional
+
+
 class GraphQLField:
     """
     GraphQL node or mutation
@@ -124,3 +127,36 @@ class NodesQL(GraphQLField):
         Add items to the node
         """
         self.node.items.extend(list(args))
+
+
+def find_in_dict(dictionary: dict, item: str, value: Optional[Any] = None):
+    """
+    Find item in dictionary
+    """
+    if isinstance(dictionary, dict):
+        if item in dictionary:
+            if value is None or dictionary[item] == value:
+                yield (dictionary[item], dictionary)
+        for _, i in dictionary.items():
+            if isinstance(i, (list, dict)):
+                yield from find_in_dict(i, item, value)
+    if isinstance(dictionary, list):
+        for i in dictionary:
+            if isinstance(i, (list, dict)):
+                yield from find_in_dict(i, item, value)
+    return
+
+
+def find_all_values(dictionary: dict, item: str, value: Optional[Any] = None):
+    """
+    Find all entries in dictionary matching 'item' and return a list of values
+    """
+    non_flat = [x for x, _ in find_in_dict(dictionary, item, value)]
+    return [item for sublist in non_flat for item in sublist]
+
+
+def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None):
+    """
+    Find all entries in dictionary matching 'item' and return a list of values
+    """
+    return [x for _, x in find_in_dict(dictionary, item, value)]
