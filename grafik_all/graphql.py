@@ -10,42 +10,33 @@ class GraphQLField:
     """
     GraphQL node or mutation
     """
-    def __init__(self, _name, *args,
-                 _alias='', _gid_path='', **kwargs):
+    def __init__(self, _name, *args, _alias='', **kwargs):
         """
         Create a node with ONE parameter
         Multi-parameters are not supported because I don't understand how they work
         """
-        self.params = ""
-        self.alias = ""
+        self.alias = ''
         self.name = _name
         self.alias = _alias
-        self.nude = kwargs.pop('_nude') if '_nude' in kwargs else False
+        self._nude = kwargs.pop('_nude') if '_nude' in kwargs else False
+        self._gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
+        self._id = kwargs.pop('id') if 'id' in kwargs else None
         self.params = kwargs
-        if self.nude:
+        if self._nude:
             if len(args) != 1:
                 raise ValueError('Only one nude item can be added')
             if not isinstance(args[0], GraphQLField):
                 raise ValueError('Nude items must be of type GraphQLField')
         self.items = list(args)
-        if 'id' in self.params and not self.params['id'].startswith('gid://'):
-            value = self.params['id']
-            prefixes = _gid_path.split("/")
-            prefix = ''
-            for segment in prefixes:
-                if not segment:
-                    continue
-                if value.startswith(segment):
-                    break
-                prefix = f'{prefix}/{segment}' if prefix else segment
-            value = value if not prefix else f'{prefix}/{value}'
-            self.params['id'] = f'gid://{value}'
+        if self._id:
+            value = self._get_gid(self._gid_path, self._id)
+            self.params['id'] = value
 
     def add(self, *args):
         """
         Add items to the field
         """
-        if self.nude:
+        if self._nude:
             self.items[0].add(*args)
         else:
             self.items.extend(list(args))
@@ -65,6 +56,41 @@ class GraphQLField:
             if isinstance(item, GraphQLField):
                 item.add(*args)
 
+    def add_params_to_all(self, **kwargs):
+        """
+        Add items to the pipeline query fields
+        """
+        for item in self.items:
+            if isinstance(item, GraphQLField):
+                item.add_params(**kwargs)
+
+    def first(self, first: int):
+        """
+        Pagination helper
+        """
+        self.add(first=first)
+
+    def after(self, after: int):
+        """
+        Pagination helper
+        """
+        self.add(after=after)
+
+    def _get_gid(self, _gid_path, _id):
+        value = _id
+        if not value.startswith('gid://'):
+            prefixes = _gid_path.split('/')
+            prefix = ''
+            for segment in prefixes:
+                if not segment:
+                    continue
+                if value.startswith(segment):
+                    break
+                prefix = f'{prefix}/{segment}' if prefix else segment
+            value = value if not prefix else f'{prefix}/{value}'
+            value = f'gid://{value}'
+        return value
+
     def _params_to_string(self):
         params = []
         for i, v in self.params.items():
@@ -72,7 +98,7 @@ class GraphQLField:
                 params.append(f'{i}: "{v}"')
             else:
                 params.append(f'{i}: {str(v)}')
-        return f'({" ".join(params)})'
+        return f'({", ".join(params)})'
 
     def _items_to_string(self, indentation, separator):
         spaces = ' ' * indentation
@@ -81,9 +107,9 @@ class GraphQLField:
             if not isinstance(item, GraphQLField):
                 yield spaces + str(item)
             else:
-                yield item.to_string(next_indention, separator, self.nude)
+                yield item._to_string(next_indention, separator, self._nude)
 
-    def to_string(self, indentation=0, separator=' ', nude=False):
+    def _to_string(self, indentation=0, separator=' ', nude=False):
         """
         Convert node to a string representation
         """
@@ -108,10 +134,15 @@ class GraphQLField:
         return separator.join(lines)
 
     def __repr__(self):
-        return self.to_string(2, '\n')
+        return self._to_string(2, '\n')
 
     def __str__(self):
-        return self.to_string()
+        return self._to_string()
+
+    def __eq__(self, other):
+        if not isinstance(other, GraphQLField):
+            return False
+        return self.name == other.name and self.alias == other.alias
 
 
 class NodesQL(GraphQLField):
@@ -137,7 +168,7 @@ class NodesQL(GraphQLField):
         self.alias_node = GraphQLField('nodes', self.node, _alias=node_alias, _nude=True)
         super().__init__(_name, self.alias_node, _alias=_alias, **kwargs)
 
-    def add(self, *args):
+    def add_to_nodes(self, *args):
         """
         Add items to the node
         """
@@ -175,30 +206,3 @@ def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None
     Find all entries in dictionary matching 'item' and return a list of values
     """
     return [x for _, x in find_in_dict(dictionary, item, value)]
-
-
-class _StatusEnum:
-    """
-    Basic class decorator to create gitlab pipeline statuses
-    The final result should be just a string, except it is not of type str
-    """
-    def __init__(self, getitem):
-        self._getitem = getitem
-        self._name = getitem.__name__
-        self.__doc__ = getitem.__doc__
-
-    def __getattr__(self, item):
-        if item in {'__name__', '__qualname__'}:
-            return self._name
-        if item == 'lower':
-            return self._name.lower()
-        if item == 'color':
-            return self._getitem(self)
-
-        raise AttributeError(item)
-
-    def __repr__(self):
-        return self._name.upper()
-
-    def __eq__(self, other):
-        return self._name == str(other)
