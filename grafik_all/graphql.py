@@ -1,6 +1,7 @@
 """
 GraphQL basic node
 """
+# pylint: disable=protected-access
 
 
 from typing import Any, Optional
@@ -161,6 +162,19 @@ class GraphQLNode:
         return self.name == other.name and self.alias == other.alias
 
 
+class AnonymousNode(GraphQLNode):
+    """
+    Node without name
+    """
+    def __init__(self, *args, **kwargs):
+        """
+        Create a node without name
+        """
+        self._no_alias = kwargs.pop('_alias') if '_alias' in kwargs else ''
+        super().__init__('', *args, **kwargs)
+        self.name = self.alias = ''
+
+
 class NodesQL(GraphQLNode):
     """
     A simple 'nodes' wrapper
@@ -191,6 +205,54 @@ class NodesQL(GraphQLNode):
         self.node.items.extend(list(args))
 
 
+class GraphQLEnum:
+    """
+    Basic class decorator to create GraphQL enums
+    The final result should be just a string, except it is not of type str
+    """
+    def __init__(self, getitems):
+        self._getitems = getitems
+        self._name = getitems.__name__
+        self.__doc__ = getitems.__doc__
+        self._items = getitems(self)
+
+    def __getattr__(self, item):
+        if item in {'__name__', '__qualname__'}:
+            return self._name
+        if item == 'lower':
+            return self._name.lower()
+        if item in self._items:
+            return self._items[item]
+
+        raise AttributeError(f'No such item: {item}')
+
+    def __repr__(self):
+        return self._name.upper()
+
+    def __eq__(self, other):
+        return self._name == str(other)
+
+
+class AutoNode(GraphQLNode):
+    """
+    Class decorator to create a simple node from function template
+    """
+    def __init__(self, node_items):
+        self._node_items = node_items
+        self._name = node_items.__name__[0].lower() + node_items.__name__[1:]
+        self.__doc__ = node_items.__doc__
+        _items, _params = node_items()
+        super().__init__(self._name, *_items, **_params)
+
+
+@AutoNode
+def PageInfo():  # pylint: disable=invalid-name
+    """
+    Create a graphql node with pagination info
+    """
+    return ('endCursor', 'startCursor', 'hasNextPage'), {}
+
+
 def find_in_dict(dictionary: dict, item: str, value: Optional[Any] = None):
     """
     Find item in dictionary
@@ -206,7 +268,6 @@ def find_in_dict(dictionary: dict, item: str, value: Optional[Any] = None):
         for i in dictionary:
             if isinstance(i, (list, dict)):
                 yield from find_in_dict(i, item, value)
-    return
 
 
 def find_all_values(dictionary: dict, item: str, value: Optional[Any] = None):

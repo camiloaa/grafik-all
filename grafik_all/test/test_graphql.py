@@ -2,13 +2,15 @@
 """
 Test subparser module
 """
+# pylint: disable=invalid-name
+
 
 from unittest import TestCase
 from git_extra.lib import graphql
 
 
 class TestGraphQL(TestCase):
-    """ Unit test for Commit class
+    """ Unit test for GraphQL
     """
 
     def test_graphql_class_add_method(self):
@@ -100,3 +102,33 @@ class TestGraphQL(TestCase):
         self.assertEqual(str(query), 'project { '
                                      'subproject(text: "free") { subitem new } '
                                      'other(text: "free") { otheritem new } }')
+
+
+@graphql.GraphQLEnum
+def CONSTANT(self):
+    """ Text CONSTANT with attributes """
+    return {'my_attr': 'MY_ATTR',
+            'other': 0}
+
+
+class TestGraphQLEnums(TestCase):
+    """ Unit test for GraphQL Enums
+    """
+
+    def test_graphql_enum_is_text(self):
+        """ Test that enums behave just like text """
+        self.assertEqual(CONSTANT, 'CONSTANT')
+        self.assertTrue(CONSTANT in [CONSTANT])
+        self.assertTrue(CONSTANT in ['CONSTANT'])
+        self.assertTrue('CONSTANT' in [CONSTANT])
+
+    def test_graphql_enum_has_attributes(self):
+        """ Test that enums have custom attributes """
+        self.assertEqual(CONSTANT.lower, 'constant')
+        self.assertEqual(CONSTANT.my_attr, 'MY_ATTR')
+        self.assertEqual(CONSTANT.other, 0)
+
+    def test_graphql_enum_does_not_have_quotation_marks(self):
+        """ Test that enums do not show quotation marks in GraphQL """
+        basic = graphql.GraphQLNode('project', 'item', name=CONSTANT)
+        self.assertEqual(str(basic), 'project(name: CONSTANT) { item }')
