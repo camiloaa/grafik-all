@@ -45,22 +45,29 @@ class GraphQLNode:
     """
     def __init__(self, _name, *args, _alias='', **kwargs):
         """
-        Create a node with ONE parameter
-        Multi-parameters are not supported because I don't understand how they work
+        Create a node with arbitrary items and parameters.
+        Special parameters start with underscore:
+            - _node: Use _node as a nude item, meaning that the created GraphQLNode
+              will not have any ites, but will treat items in _node as their own.
+              Useful when several nodes share the same items.
+            - _gid_path: Path to use when 'id=value' is used.
         """
         self.name = _name
         self.alias = _alias if _alias else ''
         self.params = {}
         self.items = []
-        self._nude = kwargs.pop('_nude') if '_nude' in kwargs else False
+        _nude_node: GraphQLNode = kwargs.pop('_node') if '_node' in kwargs else None
+        self._nude = _nude_node is not None
         self._gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
         self._add_params(**kwargs)  # self.params is a shallow copy of kwargs
         if self._nude:
-            if len(args) != 1:
-                raise ValueError('Nude nodes require exactly one parameter')
-            if not isinstance(args[0], GraphQLNode):
-                raise TypeError('Nude items must be of type GraphQLNode')
-        self.add(*args)
+            if len(args) != 0:
+                raise ValueError('Cannot add items to nude node')
+            if not isinstance(_nude_node, GraphQLNode):
+                raise ValueError('Nude items must be of type GraphQLNode')
+            self.items.append(_nude_node)
+        else:
+            self.add(*args)
 
     def add(self, *args, **kwargs):
         """
@@ -73,10 +80,11 @@ class GraphQLNode:
 
     def add_to_all(self, *args, **kwargs):
         """
-        Add items to the pipeline query fields
+        Add items to all GraphQLNodes
         """
-        for item in [i for i in self.items if isinstance(i, GraphQLNode)]:
-            item.add(*args, **kwargs)
+        for item in self.items:
+            if isinstance(item, GraphQLNode):
+                item.add(*args, **kwargs)
 
     def first(self, first: int):
         """
@@ -101,10 +109,6 @@ class GraphQLNode:
         """
         Add items to the field
         """
-        if len(self.items) <= 0 and self._nude:
-            # Add initial nude node
-            self.items.extend(args)
-            return
         if self._nude:
             self.items[0].add(*args)
             return
@@ -129,7 +133,7 @@ class GraphQLNode:
             for segment in prefixes:
                 if not segment:
                     continue
-                if _id.startswith(segment):
+                if str(_id).startswith(segment):
                     break
                 prefix = f'{prefix}/{segment}' if prefix else segment
             _id = _id if not prefix else f'{prefix}/{_id}'
@@ -170,15 +174,16 @@ class GraphQLNode:
             field = ''
         else:
             field = f'{self.alias}: {self.name}' if self.alias else self.name
-        if self.params:
+        if self.params and not nude:
             # Add params if they exist
             field = f'{field}({self._params_to_string()})'
         if self.items:
-            # Finally all the fields
+            # Add curly bracets around items if necessary
             field = field + ' ' if field else field
             field = field + '{' if not nude else field
             if field:
                 lines.append(spaces + field)
+            # Finally, add all the fields
             lines.extend(list(self._items_to_string(indentation, separator)))
             if not nude:
                 lines.append(spaces + '}')
@@ -221,22 +226,23 @@ class NodesQL(GraphQLNode):
         Use alias instead of name
         """
         _alias = kwargs.pop('_alias') if '_alias' in kwargs else ''
-        _nude = kwargs.pop('_nude') if '_nude' in kwargs else False
+        _node = kwargs.pop('_node') if '_node' in kwargs else False
         node_alias = _node_alias if _node_alias is not None else f'{_name}_nodes'
-        if _nude:
-            if len(args) != 1:
-                raise ValueError('Only one nude item can be added')
-            if not isinstance(args[0], GraphQLNode):
+        if _node:
+            if len(args) != 0:
+                raise ValueError('Cannot add items to nude node')
+            if not isinstance(_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
-            self.node = args[0]
+            self.node = _node
+            node_alias = self.node.name if self.node.name and not _node_alias else node_alias
         else:
-            self.node = GraphQLNode('', *args)
-        self.alias_node = GraphQLNode('nodes', self.node, _alias=node_alias, _nude=True)
+            self.node = GraphQLNode(node_alias, *args)
+        self.alias_node = GraphQLNode('nodes', _node=self.node, _alias=node_alias)
         super().__init__(_name, self.alias_node, _alias=_alias, **kwargs)
 
     def add_to_nodes(self, *args):
         """
-        Add items to the node
+        Add items to the 'nodes' item
         """
         self.node.items.extend(list(args))
 
@@ -274,11 +280,16 @@ class AutoNode(GraphQLNode):
     Class decorator to create a simple node from function template
     """
     def __init__(self, node_items):
-        self._node_items = node_items
+        self._nude_node_items = node_items
         self._name = node_items.__name__[0].lower() + node_items.__name__[1:]
         self.__doc__ = node_items.__doc__
         _items, _params = node_items()
         super().__init__(self._name, *_items, **_params)
+
+    def __call__(self, *args, **kwargs):
+        """"""
+        super().add(*args, **kwargs)
+        return self
 
 
 @AutoNode
