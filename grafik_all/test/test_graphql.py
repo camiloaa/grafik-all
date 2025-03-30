@@ -9,6 +9,13 @@ from unittest import TestCase
 from git_extra.lib import graphql
 
 
+@graphql.GraphQLEnum
+def CONSTANT(self):
+    """ Text CONSTANT with attributes """
+    return {'my_attr': 'MY_ATTR',
+            'other': 0}
+
+
 class TestGraphQL(TestCase):
     """ Unit test for GraphQL
     """
@@ -44,23 +51,27 @@ class TestGraphQL(TestCase):
         basic = graphql.GraphQLNode('project', 'item1', name='string')
         self.assertEqual(str(basic), 'project(name: "string") { item1 }')
         # Parameters are stored in the order they were added
-        basic.add(id='12', integer=4)
+        basic.add(id='12', integer=4, enum=CONSTANT, boolean=True)
         self.assertEqual(str(basic), 'project(name: "string", id: "gid://12",'
-                                     ' integer: 4) { item1 }')
+                                     ' integer: 4, enum: CONSTANT, boolean: true) '
+                                     '{ item1 }')
 
     def test_graphql_nodes_wrapper_no_initial_items(self):
         """ Test creating a 'field { nodes { items } }' query """
         nodes_query = graphql.NodesQL('project', id=12)
         self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes {  } }')
         nodes_query.add_to_nodes('item1', 'item2')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item1 item2 } }')
+        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { '
+                                            'project_nodes: nodes { item1 item2 } }'))
 
     def test_graphql_nodes_wrapper_with_initial_items(self):
         """ Test creating a 'field { nodes { items } }' query """
         nodes_query = graphql.NodesQL('project', 'item1', id=12)
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item1 } }')
+        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { '
+                                            'project_nodes: nodes { item1 } }'))
         nodes_query.add_to_nodes('item2')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item1 item2 } }')
+        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { project_nodes: '
+                                            'nodes { item1 item2 } }'))
 
     def test_graphql_nodes_wrapper_with_custom_nodes(self):
         """ Test creating a 'field { nodes { items } }' query """
@@ -102,13 +113,6 @@ class TestGraphQL(TestCase):
         self.assertEqual(str(query), 'project { '
                                      'subproject(text: "free") { subitem new } '
                                      'other(text: "free") { otheritem new } }')
-
-
-@graphql.GraphQLEnum
-def CONSTANT(self):
-    """ Text CONSTANT with attributes """
-    return {'my_attr': 'MY_ATTR',
-            'other': 0}
 
 
 class TestGraphQLEnums(TestCase):

@@ -7,6 +7,38 @@ GraphQL basic node
 from typing import Any, Optional
 
 
+def find_in_dict(dictionary: dict, item: str, value: Optional[Any] = None):
+    """
+    Find item in dictionary
+    """
+    if isinstance(dictionary, dict):
+        if item in dictionary:
+            if value is None or dictionary[item] == value:
+                yield (dictionary[item], dictionary)
+        for _, i in dictionary.items():
+            if isinstance(i, (list, dict)):
+                yield from find_in_dict(i, item, value)
+    if isinstance(dictionary, list):
+        for i in dictionary:
+            if isinstance(i, (list, dict)):
+                yield from find_in_dict(i, item, value)
+
+
+def find_all_values(dictionary: dict, item: str, value: Optional[Any] = None):
+    """
+    Find all entries in dictionary matching 'item' and return a list of values
+    """
+    non_flat = [x for x, _ in find_in_dict(dictionary, item, value)]
+    return [item for sublist in non_flat for item in sublist]
+
+
+def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None):
+    """
+    Find all entries in dictionary matching 'item' and return a list of values
+    """
+    return [x for _, x in find_in_dict(dictionary, item, value)]
+
+
 class GraphQLNode:
     """
     GraphQL node or mutation
@@ -109,6 +141,8 @@ class GraphQLNode:
         for i, v in self.params.items():
             if isinstance(v, str):
                 params.append(f'{i}: "{v}"')
+            elif isinstance(v, bool):
+                params.append(f'{i}: {str(v).lower()}')
             elif isinstance(v, GraphQLNode):
                 params.append(f'{i}: {{{v._params_to_string()}}}')
             else:
@@ -233,6 +267,18 @@ class GraphQLEnum:
         return self._name == str(other)
 
 
+class AutoAnon(GraphQLNode):
+    """
+    Class decorator to create a simple nude node from function template
+    """
+    def __init__(self, node_items):
+        self._node_items = node_items
+        self._name = ''
+        self.__doc__ = node_items.__doc__
+        _items, _params = node_items()
+        super().__init__(self._name, *_items, **_params)
+
+
 class AutoNode(GraphQLNode):
     """
     Class decorator to create a simple node from function template
@@ -251,35 +297,3 @@ def PageInfo():  # pylint: disable=invalid-name
     Create a graphql node with pagination info
     """
     return ('endCursor', 'startCursor', 'hasNextPage'), {}
-
-
-def find_in_dict(dictionary: dict, item: str, value: Optional[Any] = None):
-    """
-    Find item in dictionary
-    """
-    if isinstance(dictionary, dict):
-        if item in dictionary:
-            if value is None or dictionary[item] == value:
-                yield (dictionary[item], dictionary)
-        for _, i in dictionary.items():
-            if isinstance(i, (list, dict)):
-                yield from find_in_dict(i, item, value)
-    if isinstance(dictionary, list):
-        for i in dictionary:
-            if isinstance(i, (list, dict)):
-                yield from find_in_dict(i, item, value)
-
-
-def find_all_values(dictionary: dict, item: str, value: Optional[Any] = None):
-    """
-    Find all entries in dictionary matching 'item' and return a list of values
-    """
-    non_flat = [x for x, _ in find_in_dict(dictionary, item, value)]
-    return [item for sublist in non_flat for item in sublist]
-
-
-def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None):
-    """
-    Find all entries in dictionary matching 'item' and return a list of values
-    """
-    return [x for _, x in find_in_dict(dictionary, item, value)]
