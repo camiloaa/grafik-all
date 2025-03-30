@@ -84,6 +84,7 @@ class GraphQLNode:
         Add items to the field
         """
         for i, v in kwargs.items():
+            i = i.lstrip('_')
             v = self._get_gid(self._gid_path, v) if i == 'id' else v
             self.params[i] = v
 
@@ -107,9 +108,11 @@ class GraphQLNode:
         for i, v in self.params.items():
             if isinstance(v, str):
                 params.append(f'{i}: "{v}"')
+            elif isinstance(v, GraphQLNode):
+                params.append(f'{i}: {{{v._params_to_string()}}}')
             else:
                 params.append(f'{i}: {str(v)}')
-        return f'({", ".join(params)})'
+        return ", ".join(params)
 
     def _items_to_string(self, indentation, separator):
         spaces = ' ' * indentation
@@ -131,8 +134,10 @@ class GraphQLNode:
         lines = []
         field = f'{self.alias}: {self.name}' if self.alias else self.name
         if self.params:
-            field = f'{field}{self._params_to_string()}'
+            # Add params if they exist
+            field = f'{field}({self._params_to_string()})'
         if self.items:
+            # Finally all the fields
             field = field + ' ' if self.name else field
             field = field + '{' if not nude else ''
             if field:
