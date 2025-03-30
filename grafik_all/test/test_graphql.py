@@ -90,6 +90,23 @@ class TestGraphQL(TestCase):
         self.assertEqual(str(nodes_query), 'project(id: "gid://12", name: "name") '
                                            '{ project_nodes: nodes { item2 item1 item3 } }')
 
+    def test_graphql_nodes_wrapper_with_custom_named_nodes(self):
+        """ Test creating a 'field { nodes { items } }' query """
+        nodes_items = graphql.GraphQLNode('noName', 'item1')
+        nodes_query = graphql.NodesQL('project', nodes_items, id=12, _nude=True)
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item1 } }')
+        nodes_query.add_to_nodes('item2')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item1 item2 } }')
+        # Internal 'nodes' is a reference to 'nodes_items'
+        self.assertEqual(str(nodes_items), 'noName { item1 item2 }')
+        # Duplicated items are removed and added to the end
+        nodes_items.add('item1', 'item3')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item2 item1 item3 } }')
+        # Add extra parameters
+        nodes_query.add(name='name')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12", name: "name") '
+                                           '{ project_nodes: nodes { item2 item1 item3 } }')
+
     def test_graphql_pagination_shortcuts(self):
         """ Use pagination shortcuts to change parameters """
         query = graphql.GraphQLNode('project', 'item', first=10, after=0)

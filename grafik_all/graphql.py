@@ -162,19 +162,21 @@ class GraphQLNode:
         """
         Convert node to a string representation
         """
-        if nude:
-            indentation = indentation - 2
+        lines = []
         spaces = ' ' * (indentation - 2)
         # Start with the name
-        lines = []
-        field = f'{self.alias}: {self.name}' if self.alias else self.name
+        if nude:
+            indentation = indentation - 2
+            field = ''
+        else:
+            field = f'{self.alias}: {self.name}' if self.alias else self.name
         if self.params:
             # Add params if they exist
             field = f'{field}({self._params_to_string()})'
         if self.items:
             # Finally all the fields
-            field = field + ' ' if self.name else field
-            field = field + '{' if not nude else ''
+            field = field + ' ' if field else field
+            field = field + '{' if not nude else field
             if field:
                 lines.append(spaces + field)
             lines.extend(list(self._items_to_string(indentation, separator)))
@@ -265,18 +267,6 @@ class GraphQLEnum:
 
     def __eq__(self, other):
         return self._name == str(other)
-
-
-class AutoAnon(GraphQLNode):
-    """
-    Class decorator to create a simple nude node from function template
-    """
-    def __init__(self, node_items):
-        self._node_items = node_items
-        self._name = ''
-        self.__doc__ = node_items.__doc__
-        _items, _params = node_items()
-        super().__init__(self._name, *_items, **_params)
 
 
 class AutoNode(GraphQLNode):
