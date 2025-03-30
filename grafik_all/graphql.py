@@ -21,7 +21,7 @@ class GraphQLNode:
         self.items = []
         self._nude = kwargs.pop('_nude') if '_nude' in kwargs else False
         self._gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
-        self.add_params(**kwargs)  # self.params is a shallow copy of kwargs
+        self._add_params(**kwargs)  # self.params is a shallow copy of kwargs
         if self._nude:
             if len(args) != 1:
                 raise ValueError('Nude nodes require exactly one parameter')
@@ -30,6 +30,42 @@ class GraphQLNode:
         self.add(*args)
 
     def add(self, *args, **kwargs):
+        """
+        Add items or parameters to the node
+        """
+        if args:
+            self._add_items(*args)
+        if kwargs:
+            self._add_params(**kwargs)
+
+    def add_to_all(self, *args, **kwargs):
+        """
+        Add items to the pipeline query fields
+        """
+        for item in self.items:
+            if isinstance(item, GraphQLNode):
+                item.add(*args, **kwargs)
+
+    def first(self, first: int):
+        """
+        Pagination helper
+        """
+        self.add(first=first)
+
+    def after(self, after: Any):
+        """
+        Pagination helper
+        """
+        self.add(after=after)
+
+    def _drop(self, item):
+        if item in self.items:
+            self.items.remove(item)
+        elif isinstance(item, str):
+            i = GraphQLNode(item)
+            self._drop(i)
+
+    def _add_items(self, *args):
         """
         Add items to the field
         """
@@ -44,7 +80,7 @@ class GraphQLNode:
             self._drop(item)
             self.items.append(item)
 
-    def add_params(self, **kwargs):
+    def _add_params(self, **kwargs):
         """
         Add items to the field
         """
@@ -52,40 +88,6 @@ class GraphQLNode:
             v = self._get_gid(self._gid_path, v) if i == 'id' else v
             self.params[i] = v
 
-    def add_to_all(self, *args):
-        """
-        Add items to the pipeline query fields
-        """
-        for item in self.items:
-            if isinstance(item, GraphQLNode):
-                item.add(*args)
-
-    def add_params_to_all(self, **kwargs):
-        """
-        Add items to the pipeline query fields
-        """
-        for item in self.items:
-            if isinstance(item, GraphQLNode):
-                item.add_params(**kwargs)
-
-    def first(self, first: int):
-        """
-        Pagination helper
-        """
-        self.add(first=first)
-
-    def after(self, after: int):
-        """
-        Pagination helper
-        """
-        self.add(after=after)
-
-    def _drop(self, item):
-        if item in self.items:
-            self.items.remove(item)
-        elif isinstance(item, str):
-            i = GraphQLNode(item)
-            self._drop(i)
 
     def _get_gid(self, _gid_path, _id):
         if not str(_id).startswith('gid://'):
