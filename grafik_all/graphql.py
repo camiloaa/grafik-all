@@ -30,7 +30,6 @@ class GraphQLField:
         self.items = list(args)
         if 'id' in self.params and not self.params['id'].startswith('gid://'):
             value = self.params['id']
-            print(value)
             prefixes = _gid_path.split("/")
             prefix = ''
             for segment in prefixes:
@@ -40,7 +39,7 @@ class GraphQLField:
                     break
                 prefix = f'{prefix}/{segment}' if prefix else segment
             value = value if not prefix else f'{prefix}/{value}'
-            self.params['id'] = f'"gid://{value}"'
+            self.params['id'] = f'gid://{value}'
 
     def add(self, *args):
         """
@@ -69,10 +68,10 @@ class GraphQLField:
     def _params_to_string(self):
         params = []
         for i, v in self.params.items():
-            if isinstance(v, int):
-                params.append(f'{i}: {v}')
+            if isinstance(v, str):
+                params.append(f'{i}: "{v}"')
             else:
-                params.append(f'{i}: "{str(v)}"')
+                params.append(f'{i}: {str(v)}')
         return f'({" ".join(params)})'
 
     def _items_to_string(self, indentation, separator):
@@ -176,3 +175,30 @@ def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None
     Find all entries in dictionary matching 'item' and return a list of values
     """
     return [x for _, x in find_in_dict(dictionary, item, value)]
+
+
+class _StatusEnum:
+    """
+    Basic class decorator to create gitlab pipeline statuses
+    The final result should be just a string, except it is not of type str
+    """
+    def __init__(self, getitem):
+        self._getitem = getitem
+        self._name = getitem.__name__
+        self.__doc__ = getitem.__doc__
+
+    def __getattr__(self, item):
+        if item in {'__name__', '__qualname__'}:
+            return self._name
+        if item == 'lower':
+            return self._name.lower()
+        if item == 'color':
+            return self._getitem(self)
+
+        raise AttributeError(item)
+
+    def __repr__(self):
+        return self._name.upper()
+
+    def __eq__(self, other):
+        return self._name == str(other)
