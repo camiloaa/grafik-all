@@ -21,26 +21,26 @@ class GraphQLField:
         self.name = _name
         self.alias = _alias
         self.nude = kwargs.pop('_nude') if '_nude' in kwargs else False
+        self.params = kwargs
         if self.nude:
             if len(args) != 1:
                 raise ValueError('Only one nude item can be added')
             if not isinstance(args[0], GraphQLField):
                 raise ValueError('Nude items must be of type GraphQLField')
         self.items = list(args)
-        for key, value in kwargs.items():
-            if key == "id" and not value.startswith('gid://'):
-                prefixes = _gid_path.split("/")
-                prefix = ''
-                for segment in prefixes:
-                    if not segment:
-                        continue
-                    if value.startswith(segment):
-                        break
-                    prefix = f'{prefix}/{segment}' if prefix else segment
-                value = value if not prefix else f'{prefix}/{value}'
-                self.params = f'(id: "gid://{value}")'
-            else:
-                self.params = f'({key}: "{value}")'
+        if 'id' in self.params and not self.params['id'].startswith('gid://'):
+            value = self.params['id']
+            print(value)
+            prefixes = _gid_path.split("/")
+            prefix = ''
+            for segment in prefixes:
+                if not segment:
+                    continue
+                if value.startswith(segment):
+                    break
+                prefix = f'{prefix}/{segment}' if prefix else segment
+            value = value if not prefix else f'{prefix}/{value}'
+            self.params['id'] = f'"gid://{value}"'
 
     def add(self, *args):
         """
@@ -51,6 +51,13 @@ class GraphQLField:
         else:
             self.items.extend(list(args))
 
+    def add_params(self, **kwargs):
+        """
+        Add items to the field
+        """
+        for i, v in kwargs.items():
+            self.params[i] = v
+
     def add_to_all(self, *args):
         """
         Add items to the pipeline query fields
@@ -59,35 +66,44 @@ class GraphQLField:
             if isinstance(item, GraphQLField):
                 item.add(*args)
 
+    def _params_to_string(self):
+        params = []
+        for i, v in self.params.items():
+            if isinstance(v, int):
+                params.append(f'{i}: {v}')
+            else:
+                params.append(f'{i}: "{str(v)}"')
+        return f'({" ".join(params)})'
+
+    def _items_to_string(self, indentation, separator):
+        spaces = ' ' * indentation
+        next_indention = indentation + 2
+        for item in self.items:
+            if not isinstance(item, GraphQLField):
+                yield spaces + str(item)
+            else:
+                yield item.to_string(next_indention, separator, self.nude)
+
     def to_string(self, indentation=0, separator=' ', nude=False):
         """
         Convert node to a string representation
         """
         if nude:
-            next_indention = indentation
             indentation = indentation - 2
-        else:
-            next_indention = indentation + 2
-        spaces = ' ' * indentation
-        prev_spaces = ' ' * (indentation - 2)
+        spaces = ' ' * (indentation - 2)
         # Start with the name
         lines = []
         field = f'{self.alias}: {self.name}' if self.alias else self.name
         if self.params:
-            field = f'{field}{self.params}'
+            field = f'{field}{self._params_to_string()}'
         if self.items:
             field = field + ' ' if self.name else field
             field = field + '{' if not nude else ''
             if field:
-                lines.append(prev_spaces + field)
-            for item in self.items:
-                if not isinstance(item, GraphQLField):
-                    lines.append(spaces + str(item))
-                else:
-                    line = item.to_string(next_indention, separator, self.nude)
-                    lines.append(line)
+                lines.append(spaces + field)
+            lines.extend(list(self._items_to_string(indentation, separator)))
             if not nude:
-                lines.append(prev_spaces + '}')
+                lines.append(spaces + '}')
         else:
             lines = [field]
         return separator.join(lines)
