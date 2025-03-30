@@ -42,9 +42,8 @@ class GraphQLNode:
         """
         Add items to the pipeline query fields
         """
-        for item in self.items:
-            if isinstance(item, GraphQLNode):
-                item.add(*args, **kwargs)
+        for item in [i for i in self.items if isinstance(i, GraphQLNode)]:
+            item.add(*args, **kwargs)
 
     def first(self, first: int):
         """

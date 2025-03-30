@@ -1,10 +1,10 @@
 #!/bin/env python3
 """
-Test Grafik-all
+Test subparser module
 """
 
 from unittest import TestCase
-from grafik_all import graphql
+from git_extra.lib import graphql
 
 
 class TestGraphQL(TestCase):
@@ -42,7 +42,7 @@ class TestGraphQL(TestCase):
         basic = graphql.GraphQLNode('project', 'item1', name='string')
         self.assertEqual(str(basic), 'project(name: "string") { item1 }')
         # Parameters are stored in the order they were added
-        basic.add_params(id='12', integer=4)
+        basic.add(id='12', integer=4)
         self.assertEqual(str(basic), 'project(name: "string", id: "gid://12",'
                                      ' integer: 4) { item1 }')
 
@@ -72,3 +72,31 @@ class TestGraphQL(TestCase):
         # Duplicated items are removed and added to the end
         nodes_items.add('item1', 'item3')
         self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item2 item1 item3 } }')
+        # Add extra parameters
+        nodes_query.add(name='name')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12", name: "name") '
+                                           '{ project_nodes: nodes { item2 item1 item3 } }')
+
+    def test_graphql_pagination_shortcuts(self):
+        """ Use pagination shortcuts to change parameters """
+        query = graphql.GraphQLNode('project', 'item', first=10, after=0)
+        self.assertEqual(str(query), 'project(first: 10, after: 0) { item }')
+        # Use a different page
+        query.first(5)
+        query.after(10)
+        self.assertEqual(str(query), 'project(first: 5, after: 10) { item }')
+        # Using 'add' has the same result
+        query.add(first=7, after=20)
+        self.assertEqual(str(query), 'project(first: 7, after: 20) { item }')
+
+    def test_graphql_add_to_all(self):
+        """ Add to all adds items to all nodes """
+        query = graphql.GraphQLNode('project',
+                                    graphql.GraphQLNode('subproject', 'subitem'),
+                                    graphql.GraphQLNode('other', 'otheritem'))
+        self.assertEqual(str(query), 'project { subproject { subitem } other { otheritem } }')
+        # Add an item and parameter to all nodes
+        query.add_to_all('new', text='free')
+        self.assertEqual(str(query), 'project { '
+                                     'subproject(text: "free") { subitem new } '
+                                     'other(text: "free") { otheritem new } }')
