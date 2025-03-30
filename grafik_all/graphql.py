@@ -6,7 +6,7 @@ GraphQL basic node
 from typing import Any, Optional
 
 
-class GraphQLField:
+class GraphQLNode:
     """
     GraphQL node or mutation
     """
@@ -15,37 +15,41 @@ class GraphQLField:
         Create a node with ONE parameter
         Multi-parameters are not supported because I don't understand how they work
         """
-        self.alias = ''
         self.name = _name
-        self.alias = _alias
+        self.alias = _alias if _alias else ''
+        self.params = {}
+        self.items = []
         self._nude = kwargs.pop('_nude') if '_nude' in kwargs else False
         self._gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
-        self._id = kwargs.pop('id') if 'id' in kwargs else None
-        self.params = kwargs
+        self.add_params(**kwargs)  # self.params is a shallow copy of kwargs
         if self._nude:
             if len(args) != 1:
-                raise ValueError('Only one nude item can be added')
-            if not isinstance(args[0], GraphQLField):
-                raise ValueError('Nude items must be of type GraphQLField')
-        self.items = list(args)
-        if self._id:
-            value = self._get_gid(self._gid_path, self._id)
-            self.params['id'] = value
+                raise ValueError('Nude nodes require exactly one parameter')
+            if not isinstance(args[0], GraphQLNode):
+                raise TypeError('Nude items must be of type GraphQLNode')
+        self.add(*args)
 
-    def add(self, *args):
+    def add(self, *args, **kwargs):
         """
         Add items to the field
         """
+        if len(self.items) <= 0 and self._nude:
+            # Add initial nude node
+            self.items.extend(args)
+            return
         if self._nude:
             self.items[0].add(*args)
-        else:
-            self.items.extend(list(args))
+            return
+        for item in args:
+            self._drop(item)
+            self.items.append(item)
 
     def add_params(self, **kwargs):
         """
         Add items to the field
         """
         for i, v in kwargs.items():
+            v = self._get_gid(self._gid_path, v) if i == 'id' else v
             self.params[i] = v
 
     def add_to_all(self, *args):
@@ -53,7 +57,7 @@ class GraphQLField:
         Add items to the pipeline query fields
         """
         for item in self.items:
-            if isinstance(item, GraphQLField):
+            if isinstance(item, GraphQLNode):
                 item.add(*args)
 
     def add_params_to_all(self, **kwargs):
@@ -61,7 +65,7 @@ class GraphQLField:
         Add items to the pipeline query fields
         """
         for item in self.items:
-            if isinstance(item, GraphQLField):
+            if isinstance(item, GraphQLNode):
                 item.add_params(**kwargs)
 
     def first(self, first: int):
@@ -76,20 +80,26 @@ class GraphQLField:
         """
         self.add(after=after)
 
+    def _drop(self, item):
+        if item in self.items:
+            self.items.remove(item)
+        elif isinstance(item, str):
+            i = GraphQLNode(item)
+            self._drop(i)
+
     def _get_gid(self, _gid_path, _id):
-        value = _id
-        if not value.startswith('gid://'):
+        if not str(_id).startswith('gid://'):
             prefixes = _gid_path.split('/')
             prefix = ''
             for segment in prefixes:
                 if not segment:
                     continue
-                if value.startswith(segment):
+                if _id.startswith(segment):
                     break
                 prefix = f'{prefix}/{segment}' if prefix else segment
-            value = value if not prefix else f'{prefix}/{value}'
-            value = f'gid://{value}'
-        return value
+            _id = _id if not prefix else f'{prefix}/{_id}'
+            _id = f'gid://{_id}'
+        return _id
 
     def _params_to_string(self):
         params = []
@@ -102,9 +112,9 @@ class GraphQLField:
 
     def _items_to_string(self, indentation, separator):
         spaces = ' ' * indentation
-        next_indention = indentation + 2
+        next_indention = indentation + 2 if indentation > 0 else 0
         for item in self.items:
-            if not isinstance(item, GraphQLField):
+            if not isinstance(item, GraphQLNode):
                 yield spaces + str(item)
             else:
                 yield item._to_string(next_indention, separator, self._nude)
@@ -140,12 +150,12 @@ class GraphQLField:
         return self._to_string()
 
     def __eq__(self, other):
-        if not isinstance(other, GraphQLField):
+        if not isinstance(other, GraphQLNode):
             return False
         return self.name == other.name and self.alias == other.alias
 
 
-class NodesQL(GraphQLField):
+class NodesQL(GraphQLNode):
     """
     A simple 'nodes' wrapper
     """
@@ -160,12 +170,12 @@ class NodesQL(GraphQLField):
         if _nude:
             if len(args) != 1:
                 raise ValueError('Only one nude item can be added')
-            if not isinstance(args[0], GraphQLField):
-                raise ValueError('Nude items must be of type GraphQLField')
+            if not isinstance(args[0], GraphQLNode):
+                raise ValueError('Nude items must be of type GraphQLNode')
             self.node = args[0]
         else:
-            self.node = GraphQLField('', *args)
-        self.alias_node = GraphQLField('nodes', self.node, _alias=node_alias, _nude=True)
+            self.node = GraphQLNode('', *args)
+        self.alias_node = GraphQLNode('nodes', self.node, _alias=node_alias, _nude=True)
         super().__init__(_name, self.alias_node, _alias=_alias, **kwargs)
 
     def add_to_nodes(self, *args):
