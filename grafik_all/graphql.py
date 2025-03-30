@@ -7,18 +7,30 @@ class GraphQLNode:
     """
     GraphQL node or mutation
     """
-    def __init__(self, name, *args, **kwargs):
+    def __init__(self, _name, *args, _gid_path="", **kwargs):
         """
         Create a node with ONE parameter
         Multi-parameters are not supported because I don't understand how they work
         """
+        print(_name)
         self.params = ""
         self.alias = ""
-        self.name = name
+        self.name = _name
         self.items = list(args)
         for key, value in kwargs.items():
-            self.params = f'(id: "gid://{value}")' if key == "id" else \
-                          f'({key}: "{value}")'
+            if key == "id" and not value.startswith('gid://'):
+                prefixes = _gid_path.split("/")
+                prefix = ''
+                for segment in prefixes:
+                    if not segment:
+                        continue
+                    if value.startswith(segment):
+                        break
+                    prefix = f'{prefix}/{segment}' if prefix else segment
+                value = value if not prefix else f'{prefix}/{value}'
+                self.params = f'(id: "gid://{value}")'
+            else:
+                self.params = f'({key}: "{value}")'
 
     def add(self, *args):
         """
@@ -50,3 +62,15 @@ class GraphQLNode:
 
     def __str__(self):
         return self.to_string()
+
+
+class NodeQL(GraphQLNode):
+    """
+    A simple 'nodes' wrapper
+    """
+    def __init__(self, _name, *args, _gid_path="", **kwargs):
+        """
+        Use alias instead of name
+        """
+        super(NodeQL, self).__init__('nodes', *args, _gid_path, **kwargs)
+        self.alias = _name
