@@ -56,47 +56,49 @@ class GraphQLNode:
         self.alias = _alias if _alias else ''
         self.params = {}
         self.items = []
-        _nude_node: GraphQLNode = kwargs.pop('_node') if '_node' in kwargs else None
-        self._nude = _nude_node is not None
-        self._gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
+        self._nude = False
+        self._constant = False
         self._add_params(**kwargs)  # self.params is a shallow copy of kwargs
-        if self._nude:
-            if len(args) != 0:
-                raise ValueError('Cannot add items to nude node')
-            if not isinstance(_nude_node, GraphQLNode):
-                raise ValueError('Nude items must be of type GraphQLNode')
-            self.items.append(_nude_node)
-        else:
-            self.add(*args)
+        self.add(*args)
 
     def add(self, *args, **kwargs):
         """
         Add items or parameters to the node
         """
+        if self._constant:
+            raise TypeError("Cannot update a const!")
         if args:
             self._add_items(*args)
         if kwargs:
             self._add_params(**kwargs)
+        return self
 
     def add_to_all(self, *args, **kwargs):
         """
         Add items to all GraphQLNodes
         """
+        if self._constant:
+            raise TypeError("Cannot update a const!")
         for item in self.items:
             if isinstance(item, GraphQLNode):
                 item.add(*args, **kwargs)
+        return self
 
     def first(self, first: int):
         """
         Pagination helper
         """
+        if self._constant:
+            raise TypeError("Cannot update a const!")
         self.add(first=first)
 
     def after(self, after: Any):
         """
         Pagination helper
         """
-        self.add(after=after)
+        if self._constant:
+            raise TypeError("Cannot update a const!")
+        return self.add(after=after)
 
     def _drop(self, item):
         if item in self.items:
@@ -120,11 +122,17 @@ class GraphQLNode:
         """
         Add items to the field
         """
+        _nude_node: GraphQLNode = kwargs.pop('_node') if '_node' in kwargs else None
+        self._gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
+        if _nude_node:
+            if not isinstance(_nude_node, GraphQLNode):
+                raise ValueError('Nude items must be of type GraphQLNode')
+            self._nude = _nude_node is not None
+            self.items = [_nude_node]
         for i, v in kwargs.items():
             i = i.lstrip('_')
             v = self._get_gid(self._gid_path, v) if i == 'id' else v
             self.params[i] = v
-
 
     def _get_gid(self, _gid_path, _id):
         if not str(_id).startswith('gid://'):
@@ -202,18 +210,10 @@ class GraphQLNode:
             return False
         return self.name == other.name and self.alias == other.alias
 
-
-class AnonymousNode(GraphQLNode):
-    """
-    Node without name
-    """
-    def __init__(self, *args, **kwargs):
-        """
-        Create a node without name
-        """
-        self._no_alias = kwargs.pop('_alias') if '_alias' in kwargs else ''
-        super().__init__('', *args, **kwargs)
-        self.name = self.alias = ''
+    def __call__(self, *args, **kwargs):
+        """"""
+        self.add(*args, **kwargs)
+        return self
 
 
 class NodesQL(GraphQLNode):
@@ -229,12 +229,12 @@ class NodesQL(GraphQLNode):
         _node = kwargs.pop('_node') if '_node' in kwargs else False
         node_alias = _node_alias if _node_alias is not None else f'{_name}_nodes'
         if _node:
-            if len(args) != 0:
-                raise ValueError('Cannot add items to nude node')
             if not isinstance(_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
             self.node = _node
             node_alias = self.node.name if self.node.name and not _node_alias else node_alias
+            if len(args) != 0:
+                pass  # What to do if there are args? Ignore them looks safe
         else:
             self.node = GraphQLNode(node_alias, *args)
         self.alias_node = GraphQLNode('nodes', _node=self.node, _alias=node_alias)
@@ -275,25 +275,37 @@ class GraphQLEnum:
         return self._name == str(other)
 
 
-class AutoNode(GraphQLNode):
+def AutoNode(base_class):
     """
-    Class decorator to create a simple node from function template
+    Decorator to create a class derived from GraphQLNode, filled with the
+    data returned by a function.
+    See PageInfo function down this file to understand what it means.
     """
-    def __init__(self, node_items):
-        self._nude_node_items = node_items
-        self._name = node_items.__name__[0].lower() + node_items.__name__[1:]
-        self.__doc__ = node_items.__doc__
-        _items, _params = node_items()
-        super().__init__(self._name, *_items, **_params)
+    class DerivedNode(base_class):
+        """
+        Class decorator to create a simple node from function template
+        """
+        def __init__(self, node_items):
+            assert issubclass(base_class, GraphQLNode)
+            self._nude_node_items = node_items
+            self._name = node_items.__name__[0].lower() + node_items.__name__[1:]
+            self.__doc__ = node_items.__doc__
+            self._items, self._params = node_items()
+            super().__init__(self._name, *self._items, **self._params)
+            self._constant = True
 
-    def __call__(self, *args, **kwargs):
-        """"""
-        super().add(*args, **kwargs)
-        return self
+        def __call__(self, *args, **kwargs):
+            """ """
+            for i, v in self._params.items():
+                if i not in kwargs:
+                    kwargs[i] = v
+            return base_class(self.name, *self._items, *args, **kwargs)
+
+    return DerivedNode
 
 
-@AutoNode
-def PageInfo():  # pylint: disable=invalid-name
+@AutoNode(GraphQLNode)
+def PageInfo(*_, **__):  # pylint: disable=invalid-name
     """
     Create a graphql node with pagination info
     """

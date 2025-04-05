@@ -6,11 +6,11 @@ Test graphql module
 
 
 from unittest import TestCase
-from git_extra.lib import graphql
+from grafik_all import graphql
 
 
 @graphql.GraphQLEnum
-def CONSTANT(self):
+def CONSTANT(*_, **__):
     """ Text CONSTANT with attributes """
     return {'my_attr': 'MY_ATTR',
             'other': 0}
@@ -153,3 +153,33 @@ class TestGraphQLEnums(TestCase):
         """ Test that enums do not show quotation marks in GraphQL """
         basic = graphql.GraphQLNode('project', 'item', name=CONSTANT)
         self.assertEqual(str(basic), 'project(name: CONSTANT) { item }')
+
+
+@graphql.AutoNode(graphql.GraphQLNode)
+def TestNode():
+    return ('field1', 'field2'), {}
+
+
+class TestAutoNode(TestCase):
+    """ Unit test for AutoNode
+    """
+
+    def test_auto_node_contents(self):
+        """ Auto node should create a template """
+        self.assertEqual(str(TestNode), 'testNode { field1 field2 }')
+
+    def test_extend_auto_node(self):
+        """ Auto node should create an extended node from template """
+        self.assertEqual(str(TestNode('extra')), 'testNode { field1 field2 extra }')
+
+    def test_auto_node_is_constant(self):
+        """ Changing auto node will raise an exception """
+        var = TestNode
+        # Calling var.add('extra') will raise an exception
+        self.assertRaises(TypeError, var.add, 'extra')
+
+    def test_extended_auto_node_is_not_constant(self):
+        """ Auto node should create an extended node from template """
+        var = TestNode()
+        self.assertEqual(str(var.add('other')),
+                         'testNode { field1 field2 other }')
