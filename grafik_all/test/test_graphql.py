@@ -22,7 +22,7 @@ def load_yaml_data(filename: str):
 
 
 @graphql.GraphQLEnum
-def CONSTANT(*_, **__):
+def CONSTANT():
     """ Text CONSTANT with attributes """
     return {'my_attr': 'MY_ATTR',
             'other': 0}
@@ -168,8 +168,24 @@ class TestGraphQLEnums(TestCase):
 
 
 @graphql.AutoNode(graphql.GraphQLNode)
-def TestNode():
+def TestNode(*_, **__):
     return ('field1', 'field2'), {}
+
+
+@graphql.AutoNode(graphql.GraphQLNode)
+def TestFixedNode(*_, **__):
+    """ Fixed items """
+    return (('field1', 'field2'),
+            {'_valid_items': ['field1', 'field2', 'field3'],
+             '_valid_params': ['id', 'and']})
+
+
+@graphql.AutoNode(graphql.GraphQLNode)
+def TestNoItemsNode(*_, **__):
+    """ No items, only parameters """
+    return ((),
+            {'_valid_items': [],
+             '_valid_params': ['id', 'and']})
 
 
 class TestAutoNode(TestCase):
@@ -196,6 +212,61 @@ class TestAutoNode(TestCase):
         self.assertEqual(str(var.add('other')),
                          'testNode { field1 field2 other }')
 
+    def test_extending_valid_item(self):
+        """ Auto node should create an extended node from template """
+        var = TestFixedNode('field3')
+        self.assertEqual(str(var),
+                         'testFixedNode { field1 field2 field3 }')
+
+    def test_extending_valid_node_item(self):
+        """ Auto node should create an extended node from template """
+        field3 = graphql.GraphQLNode('field3', 'subitem1', 'subitem2')
+        var = TestFixedNode(field3)
+        self.assertEqual(str(var),
+                         'testFixedNode { field1 field2 '
+                         'field3 { subitem1 subitem2 } }')
+
+    def test_extending_invalid_item(self):
+        """ Only allow to add items in the _valid_items list """
+        var = TestFixedNode()
+        self.assertRaises(ValueError, var.add, 'extra')
+        self.assertEqual(str(var),
+                         'testFixedNode { field1 field2 }')
+
+    def test_extending_invalid_node_item(self):
+        """ Only allow to add items in the _valid_items list """
+        var = TestFixedNode()
+        extra = graphql.GraphQLNode('extra', 'subitem1', 'subitem2')
+        self.assertRaises(ValueError, var.add, extra)
+        self.assertEqual(str(var),
+                         'testFixedNode { field1 field2 }')
+
+    def test_extending_invalid_item_empy_list(self):
+        """ Only allow to add items in the _valid_items list
+            Empty list means no items can be added """
+        var = TestNoItemsNode()
+        self.assertRaises(ValueError, var.add, 'extra')
+        self.assertEqual(str(var), 'testNoItemsNode')
+
+    def test_extending_valid_params(self):
+        """ Only allow to add params in the _valid_params list """
+        var = TestNoItemsNode(_and=True, id=12)
+        self.assertEqual(str(var), 'testNoItemsNode(and: true, id: "gid://12")')
+
+    def test_extending_invalid_params(self):
+        """ Only allow to add params in the _valid_params list """
+        var = TestFixedNode(_and=True)
+        var.add('field3', id=12)
+        self.assertEqual(str(var), 'testFixedNode(and: true, id: "gid://12")'
+                                   ' { field1 field2 field3 }')
+        self.assertRaises(ValueError, var.add, field2='extra')
+
+    def test_input_constructor(self):
+        """ Input works differently to other auto-nodes """
+        var = graphql.Input('id', 'or', 'name', name='me')
+        self.assertEqual(str(var), 'input(name: "me")')
+        var.add(id=21)
+        self.assertEqual(str(var), 'input(name: "me", id: "gid://21")')
 
 class TestFindMethods(TestCase):
     """ Unit test for find_in_dict

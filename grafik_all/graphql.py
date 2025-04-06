@@ -58,6 +58,9 @@ class GraphQLNode:
         self.items = []
         self._nude = False
         self._constant = False
+        self._valid_params = None
+        self._valid_items = None
+        self._gid_path = ''
         self._add_params(**kwargs)  # self.params is a shallow copy of kwargs
         self.add(*args)
 
@@ -67,10 +70,10 @@ class GraphQLNode:
         """
         if self._constant:
             raise TypeError("Cannot update a const!")
-        if args:
-            self._add_items(*args)
         if kwargs:
             self._add_params(**kwargs)
+        if args:
+            self._add_items(*args)
         return self
 
     def add_to_all(self, *args, **kwargs):
@@ -115,6 +118,9 @@ class GraphQLNode:
             self.items[0].add(*args)
             return
         for item in args:
+            if self._valid_items is not None and item not in self._valid_items:
+                error_msg = f"Item '{item}' is not valid"
+                raise ValueError(error_msg)
             self._drop(item)
             self.items.append(item)
 
@@ -122,16 +128,26 @@ class GraphQLNode:
         """
         Add items to the field
         """
+        # Process special parameters first
         _nude_node: GraphQLNode = kwargs.pop('_node') if '_node' in kwargs else None
-        self._gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
+        _valid_params = kwargs.pop('_valid_params') if '_valid_params' in kwargs else None
+        _valid_items = kwargs.pop('_valid_items') if '_valid_items' in kwargs else None
+        _gid_path = kwargs.pop('_gid_path') if '_gid_path' in kwargs else ''
         if _nude_node:
             if not isinstance(_nude_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
             self._nude = _nude_node is not None
             self.items = [_nude_node]
+        self._valid_params = _valid_params if _valid_params is not None else self._valid_params
+        self._valid_items = _valid_items if _valid_items is not None else self._valid_items
+        self._gid_path = _gid_path if _gid_path is not None else self._gid_path
+        # Process other parameters
         for i, v in kwargs.items():
             i = i.lstrip('_')
             v = self._get_gid(self._gid_path, v) if i == 'id' else v
+            if self._valid_params is not None and i not in self._valid_params:
+                error_msg = f"Parameter '{i}' is not valid"
+                raise ValueError(error_msg)
             self.params[i] = v
 
     def _get_gid(self, _gid_path, _id):
@@ -206,9 +222,11 @@ class GraphQLNode:
         return self._to_string()
 
     def __eq__(self, other):
-        if not isinstance(other, GraphQLNode):
-            return False
-        return self.name == other.name and self.alias == other.alias
+        if isinstance(other, str):
+            return self.name == other or f'{self.alias}: {self.name}' == other
+        if isinstance(other, GraphQLNode):
+            return self.name == other.name and self.alias == other.alias
+        return False
 
     def __call__(self, *args, **kwargs):
         """"""
@@ -247,6 +265,15 @@ class NodesQL(GraphQLNode):
         self.node.items.extend(list(args))
 
 
+class GraphQLInput(GraphQLNode):
+    """
+    """
+    def __init__(self, _name, *args, **kwargs):
+        """ Input class """
+        _valid_parmas = list(args) if args else None
+        super().__init__(_name, _valid_params=_valid_parmas, _valid_items=[], **kwargs)
+
+
 class GraphQLEnum:
     """
     Basic class decorator to create GraphQL enums
@@ -256,7 +283,7 @@ class GraphQLEnum:
         self._getitems = getitems
         self._name = getitems.__name__
         self.__doc__ = getitems.__doc__
-        self._items = getitems(self)
+        self._items = getitems()
 
     def __getattr__(self, item):
         if item in {'__name__', '__qualname__'}:
@@ -279,7 +306,7 @@ def AutoNode(base_class):
     """
     Decorator to create a class derived from GraphQLNode, filled with the
     data returned by a function.
-    See PageInfo function down this file to understand what it means.
+    See functions with @AutoNode down this file to understand what it means.
     """
     class DerivedNode(base_class):
         """
@@ -287,7 +314,7 @@ def AutoNode(base_class):
         """
         def __init__(self, node_items):
             assert issubclass(base_class, GraphQLNode)
-            self._nude_node_items = node_items
+            self._node_func = node_items
             self._name = node_items.__name__[0].lower() + node_items.__name__[1:]
             self.__doc__ = node_items.__doc__
             self._items, self._params = node_items()
@@ -302,6 +329,7 @@ def AutoNode(base_class):
             return base_class(self.name, *self._items, *args, **kwargs)
 
     return DerivedNode
+
 
 #######################################################
 # Typical nodes expected in all graphql implementations
@@ -329,3 +357,12 @@ def PageInfo(*_, **__):  # pylint: disable=invalid-name
     Create a graphql node with pagination info
     """
     return ('endCursor', 'startCursor', 'hasNextPage'), {}
+
+
+@AutoNode(GraphQLInput)
+def Input(*_, **__):  # pylint: disable=invalid-name
+    """
+    Create a generic input node without any items
+    Arguments are treated as a list of valid parameters
+    """
+    return ((), {})
