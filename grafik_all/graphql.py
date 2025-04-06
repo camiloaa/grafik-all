@@ -303,6 +303,25 @@ def AutoNode(base_class):
 
     return DerivedNode
 
+#######################################################
+# Typical nodes expected in all graphql implementations
+#######################################################
+
+@AutoNode(GraphQLNode)
+def Query(*_, **__):  # pylint: disable=invalid-name
+    """
+    Create a query root node
+    """
+    return (), {}
+
+
+@AutoNode(GraphQLNode)
+def Mutation(*_, **__):  # pylint: disable=invalid-name
+    """
+    Create a mutation root node
+    """
+    return (), {}
+
 
 @AutoNode(GraphQLNode)
 def PageInfo(*_, **__):  # pylint: disable=invalid-name
