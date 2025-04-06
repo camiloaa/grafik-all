@@ -5,8 +5,20 @@ Test graphql module
 # pylint: disable=invalid-name
 
 
+import os
+import yaml
 from unittest import TestCase
 from grafik_all import graphql
+
+
+TEST_DIR = os.path.dirname(__file__)
+
+
+def load_yaml_data(filename: str):
+    """ Load yaml data from a file """
+    with open(filename, encoding='utf-8') as f:
+        json_content = f.read()
+    return yaml.safe_load(json_content)
 
 
 @graphql.GraphQLEnum
@@ -183,3 +195,22 @@ class TestAutoNode(TestCase):
         var = TestNode()
         self.assertEqual(str(var.add('other')),
                          'testNode { field1 field2 other }')
+
+
+class TestFindMethods(TestCase):
+    """ Unit test for find_in_dict
+    """
+
+    def test_find_all_values(self):
+        """ Assert all found nodes have the right value """
+        data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_all_values.yml')
+        found = graphql.find_all_values(data, 'pipeline_nodes')
+        self.maxDiff = None
+        self.assertListEqual(found, reference)
+
+    def test_find_all_values(self):
+        """ Assert all found nodes have the right value """
+        data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_all_containers.yml')
+        found = graphql.find_all_containers(data, 'iid')
+        self.maxDiff = None
+        self.assertListEqual(found, reference)

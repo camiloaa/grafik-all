@@ -295,7 +295,7 @@ def AutoNode(base_class):
             self._constant = True
 
         def __call__(self, *args, **kwargs):
-            """ """
+            """ Calling the decorated method will work as a constructor """
             for i, v in self._params.items():
                 if i not in kwargs:
                     kwargs[i] = v
