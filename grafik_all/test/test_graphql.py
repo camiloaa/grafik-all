@@ -3,6 +3,7 @@
 Test graphql module
 """
 # pylint: disable=invalid-name
+# pylint: disable=no-member
 
 
 import os
@@ -22,7 +23,7 @@ def load_yaml_data(filename: str):
 
 
 @graphql.GraphQLEnum
-def CONSTANT():
+def CONSTANT(self):
     """ Text CONSTANT with attributes """
     return {'my_attr': 'MY_ATTR',
             'other': 0}
@@ -168,12 +169,12 @@ class TestGraphQLEnums(TestCase):
 
 
 @graphql.AutoNode(graphql.GraphQLNode)
-def TestNode(*_, **__):
+def TestNode(*_, **__) -> graphql.GraphQLNode:
     return ('field1', 'field2'), {}
 
 
 @graphql.AutoNode(graphql.GraphQLNode)
-def TestFixedNode(*_, **__):
+def TestFixedNode(*_, **__) -> graphql.GraphQLNode:
     """ Fixed items """
     return (('field1', 'field2'),
             {'_valid_items': ['field1', 'field2', 'field3'],
@@ -181,7 +182,7 @@ def TestFixedNode(*_, **__):
 
 
 @graphql.AutoNode(graphql.GraphQLNode)
-def TestNoItemsNode(*_, **__):
+def TestNoItemsNode(*_, **__) -> graphql.GraphQLNode:
     """ No items, only parameters """
     return ((),
             {'_valid_items': [],
@@ -268,6 +269,17 @@ class TestAutoNode(TestCase):
         var.add(id=21)
         self.assertEqual(str(var), 'input(name: "me", id: "gid://21")')
 
+    def test_complex_input_structures(self):
+        """ Input works differently to other auto-nodes """
+        i1 = graphql.Input(id=1, name='me', test=True)
+        i2 = graphql.Input(id=2, name='you', test=False)
+        i = graphql.Input(value=3, elems=[i1, i2])
+        var = graphql.GraphQLNode('node', 'id', 'name', input=i)
+        self.assertEqual(str(var), ('node(input: { value: 3, elems: '
+                                    '[ { id: "gid://1", name: "me", test: true }, '
+                                    '{ id: "gid://2", name: "you", test: false } ] }) '
+                                    '{ id name }'))
+
 class TestFindMethods(TestCase):
     """ Unit test for find_in_dict
     """
@@ -279,9 +291,42 @@ class TestFindMethods(TestCase):
         self.maxDiff = None
         self.assertListEqual(found, reference)
 
-    def test_find_all_values(self):
+    def test_find_all_containers(self):
         """ Assert all found nodes have the right value """
         data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_all_containers.yml')
         found = graphql.find_all_containers(data, 'iid')
         self.maxDiff = None
         self.assertListEqual(found, reference)
+
+
+class TestNodeId(TestCase):
+    """ Unit test for GraphQLNode
+    """
+
+    def test_empty_id(self):
+        """ Any id matches and empty _gid_path """
+        node = graphql.GraphQLNode('test')
+        self.assertEqual(node.matching_gid('123'), '123')
+        self.assertEqual(node.matching_gid('gid://123'), '123')
+        self.assertEqual(node.matching_gid('gid://path/123'), '123')
+        self.assertEqual(node.matching_gid('path/123'), '123')
+        self.assertEqual(node.matching_gid(123), '123')
+        self.assertFalse(node.matching_gid('1a23'))
+
+    def test_not_empty_id_path(self):
+        """ Match the latest part of the path """
+        node = graphql.GraphQLNode('test', _gid_path='full/path')
+        # Matching ids
+        self.assertEqual(node.matching_gid('123'), '123')
+        self.assertEqual(node.matching_gid('path/123'), '123')
+        self.assertEqual(node.matching_gid('full/path/123'), '123')
+        self.assertEqual(node.matching_gid('gid://full/path/123'), '123')
+        self.assertEqual(node.matching_gid(123), '123')
+        # Non-matching paths
+        self.assertFalse(node.matching_gid('gid://123'))
+        self.assertFalse(node.matching_gid('gid://full/123'))
+        self.assertFalse(node.matching_gid('gid://path/123'))
+        # Assert invalid input
+        self.assertFalse(node.matching_gid('gid://full/path/1a23'))
+        self.assertFalse(node.matching_gid(''))
+        self.assertFalse(node.matching_gid(None))

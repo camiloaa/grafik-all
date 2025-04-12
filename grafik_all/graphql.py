@@ -29,8 +29,13 @@ def find_all_values(dictionary: dict, item: str, value: Optional[Any] = None):
     Find all entries in dictionary matching 'item' and return a list of values
     """
     non_flat = [x for x, _ in find_in_dict(dictionary, item, value)]
-    return [item for sublist in non_flat for item in sublist]
-
+    flat = []
+    for x in non_flat:
+        if isinstance(x, list):
+            flat.extend(x)
+        elif x is not None:
+            flat.append(x)
+    return flat
 
 def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None):
     """
@@ -38,6 +43,25 @@ def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None
     """
     return [x for _, x in find_in_dict(dictionary, item, value)]
 
+
+def _param_to_graphql_rep(item: any):
+    """
+    Convert any item in parameters to its graphql representation.
+    Strings require double quotations, but other types don't.
+    """
+    if isinstance(item, str):
+        return f'"{item}"'
+    elif isinstance(item, bool):
+        return f'{str(item).lower()}'
+    elif isinstance(item, GraphQLNode):
+        return f'{{ {item._params_to_string()} }}'
+    elif isinstance(item, list):
+        res = []
+        for v in item:
+            res.append(_param_to_graphql_rep(v))
+        return '[ ' + ', '.join(res) + ' ]'
+    else:
+        return str(item)
 
 class GraphQLNode:
     """
@@ -103,6 +127,28 @@ class GraphQLNode:
             raise TypeError("Cannot update a const!")
         return self.add(after=after)
 
+    def matching_gid(self, other: str):
+        """
+        Return 'id' if 'other' gid is the same type as this node
+        Return empty string otherwise
+        """
+        other = str(other)
+        other_id = [x for x in other.split('/') if x]
+        my_id = [x for x in self._gid_path.split('/') if x]
+        needs_full_id = False
+        if 'gid:' in other_id:
+            other_id.remove('gid:')
+            needs_full_id = True
+        if not other_id:
+            return ''
+        id_num = other_id.pop()
+        for i in reversed(my_id):
+            if not other_id and needs_full_id:
+                return ''
+            if other_id and other_id.pop() != i:
+                return ''
+        return id_num if id_num.isdigit() else ''
+
     def _drop(self, item):
         if item in self.items:
             self.items.remove(item)
@@ -167,14 +213,7 @@ class GraphQLNode:
     def _params_to_string(self):
         params = []
         for i, v in self.params.items():
-            if isinstance(v, str):
-                params.append(f'{i}: "{v}"')
-            elif isinstance(v, bool):
-                params.append(f'{i}: {str(v).lower()}')
-            elif isinstance(v, GraphQLNode):
-                params.append(f'{i}: {{{v._params_to_string()}}}')
-            else:
-                params.append(f'{i}: {str(v)}')
+            params.append(f'{i}: {_param_to_graphql_rep(v)}')
         return ", ".join(params)
 
     def _items_to_string(self, indentation, separator):
@@ -267,6 +306,13 @@ class NodesQL(GraphQLNode):
 
 class GraphQLInput(GraphQLNode):
     """
+    Input class. Inputs have names, but do not have any items, and their string
+    representation looks almost like a dictionary.
+    Inputs are used as parameters for other nodes. They are different from
+    simple dictionaries in that their string representation is aware of graphql
+    uniqueness like booleans being lowercase, and gid's needing 'gid://'; plus
+    some additional spaces to make it both visually consistent with the rest of
+    the library and obviously different from a dictionary.
     """
     def __init__(self, _name, *args, **kwargs):
         """ Input class """
@@ -277,29 +323,34 @@ class GraphQLInput(GraphQLNode):
 class GraphQLEnum:
     """
     Basic class decorator to create GraphQL enums
-    The final result should be just a string, except it is not of type str
+    The final result is a case-insensitive string.
+    It can be compared, but not assigned, to strings.
     """
     def __init__(self, getitems):
         self._getitems = getitems
         self._name = getitems.__name__
         self.__doc__ = getitems.__doc__
-        self._items = getitems()
+        self._items = getitems(self)
 
     def __getattr__(self, item):
         if item in {'__name__', '__qualname__'}:
             return self._name
         if item == 'lower':
             return self._name.lower()
+        if item == 'upper':
+            return self._name.upper()
         if item in self._items:
             return self._items[item]
 
         raise AttributeError(f'No such item: {item}')
 
     def __repr__(self):
-        return self._name.upper()
+        """ Just a string """
+        return self._name
 
     def __eq__(self, other):
-        return self._name == str(other)
+        """ Enum tests are case-insensitive """
+        return self._name.lower() == str(other).lower()
 
 
 def AutoNode(base_class):
@@ -312,7 +363,7 @@ def AutoNode(base_class):
         """
         Class decorator to create a simple node from function template
         """
-        def __init__(self, node_items):
+        def __init__(self, node_items) -> None:
             assert issubclass(base_class, GraphQLNode)
             self._node_func = node_items
             self._name = node_items.__name__[0].lower() + node_items.__name__[1:]
@@ -321,11 +372,13 @@ def AutoNode(base_class):
             super().__init__(self._name, *self._items, **self._params)
             self._constant = True
 
-        def __call__(self, *args, **kwargs):
+        def __call__(self, *args, **kwargs) -> GraphQLNode:
             """ Calling the decorated method will work as a constructor """
             for i, v in self._params.items():
                 if i not in kwargs:
                     kwargs[i] = v
+            if '_node' in kwargs:  # Use node attributes if a node is provided
+                return base_class(self.name, *args, **kwargs)
             return base_class(self.name, *self._items, *args, **kwargs)
 
     return DerivedNode
@@ -336,7 +389,7 @@ def AutoNode(base_class):
 #######################################################
 
 @AutoNode(GraphQLNode)
-def Query(*_, **__):  # pylint: disable=invalid-name
+def Query(*_, **__) -> GraphQLNode:  # pylint: disable=invalid-name
     """
     Create a query root node
     """
@@ -344,7 +397,7 @@ def Query(*_, **__):  # pylint: disable=invalid-name
 
 
 @AutoNode(GraphQLNode)
-def Mutation(*_, **__):  # pylint: disable=invalid-name
+def Mutation(*_, **__) -> GraphQLNode:  # pylint: disable=invalid-name
     """
     Create a mutation root node
     """
@@ -352,7 +405,7 @@ def Mutation(*_, **__):  # pylint: disable=invalid-name
 
 
 @AutoNode(GraphQLNode)
-def PageInfo(*_, **__):  # pylint: disable=invalid-name
+def PageInfo(*_, **__) -> GraphQLNode:  # pylint: disable=invalid-name
     """
     Create a graphql node with pagination info
     """
@@ -360,7 +413,7 @@ def PageInfo(*_, **__):  # pylint: disable=invalid-name
 
 
 @AutoNode(GraphQLInput)
-def Input(*_, **__):  # pylint: disable=invalid-name
+def Input(*_, **__) -> GraphQLInput:  # pylint: disable=invalid-name
     """
     Create a generic input node without any items
     Arguments are treated as a list of valid parameters
