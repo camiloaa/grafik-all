@@ -69,57 +69,6 @@ class TestGraphQL(TestCase):
                                      ' integer: 4, enum: CONSTANT, boolean: true) '
                                      '{ item1 }')
 
-    def test_graphql_nodes_wrapper_no_initial_items(self):
-        """ Test creating a 'field { nodes { items } }' query """
-        nodes_query = graphql.NodesQL('project', id=12)
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes {  } }')
-        nodes_query.add_to_nodes('item1', 'item2')
-        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { '
-                                            'project_nodes: nodes { item1 item2 } }'))
-
-    def test_graphql_nodes_wrapper_with_initial_items(self):
-        """ Test creating a 'field { nodes { items } }' query """
-        nodes_query = graphql.NodesQL('project', 'item1', id=12)
-        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { '
-                                            'project_nodes: nodes { item1 } }'))
-        nodes_query.add_to_nodes('item2')
-        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { project_nodes: '
-                                            'nodes { item1 item2 } }'))
-
-    def test_graphql_nodes_wrapper_with_custom_nodes(self):
-        """ Test creating a 'field { nodes { items } }' query """
-        nodes_items = graphql.GraphQLNode('', 'item1')
-        nodes_query = graphql.NodesQL('project', _node=nodes_items, id=12)
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item1 } }')
-        nodes_query.add_to_nodes('item2')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item1 item2 } }')
-        # Internal 'nodes' is a reference to 'nodes_items'
-        self.assertEqual(str(nodes_items), '{ item1 item2 }')
-        # Duplicated items are removed and added to the end
-        nodes_items.add('item1', 'item3')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { item2 item1 item3 } }')
-        # Add extra parameters
-        nodes_query.add(name='name')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12", name: "name") '
-                                           '{ project_nodes: nodes { item2 item1 item3 } }')
-
-    def test_graphql_nodes_wrapper_with_custom_named_nodes(self):
-        """ Test creating a 'field { nodes { items } }' query """
-        nodes_items = graphql.GraphQLNode('noName', 'item1')
-        nodes_query = graphql.NodesQL('project', _node=nodes_items, id=12)
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { noName: nodes { item1 } }')
-        nodes_query.add_to_nodes('item2')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { noName: nodes { item1 item2 } }')
-        # Internal 'nodes' is a reference to 'nodes_items'
-        self.assertEqual(str(nodes_items), 'noName { item1 item2 }')
-        # Duplicated items are removed and added to the end
-        nodes_items.add('item1', 'item3')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { noName: nodes { item2 item1 item3 } }')
-        # Add extra parameters
-        nodes_query.add(name='name')
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12", name: "name") '
-                                           '{ noName: nodes { item2 item1 item3 } }')
-
     def test_graphql_pagination_shortcuts(self):
         """ Use pagination shortcuts to change parameters """
         query = graphql.GraphQLNode('project', 'item', first=10, after=0)
@@ -279,6 +228,92 @@ class TestAutoNode(TestCase):
                                     '[ { id: "gid://1", name: "me", test: true }, '
                                     '{ id: "gid://2", name: "you", test: false } ] }) '
                                     '{ id name }'))
+
+
+@graphql.AutoNode(graphql.NodesQL)
+def NodesQlItem(*_, **__) -> graphql.GraphQLNode:
+    """ NodesQL item with extra items in the top definition """
+    return ('nodeElem1', 'nodeElem2'), {'_top': ['count']}
+
+
+class TestNodesQL(TestCase):
+    """ Unit test for NodesQL class """
+
+    def test_basic_nodes_ql(self):
+        """ Create and populate a 'nodes' object """
+        node = graphql.NodesQL('item', 'nodeElem1', 'nodeElem2')
+        self.assertEqual(str(node),
+                         'item { item_nodes: nodes { nodeElem1 nodeElem2 } }')
+
+    def test_nodes_ql_with_top(self):
+        """ Create and populate a 'nodes' object including count """
+        node = graphql.NodesQL('item', 'nodeElem1', 'nodeElem2', _top=['count'])
+        self.assertEqual(str(node),
+                         'item { count item_nodes: nodes { nodeElem1 nodeElem2 } }')
+
+    def test_nodes_ql_with_top_using_autonode(self):
+        """ Create and populate a 'nodes' object including count """
+        self.assertEqual(str(NodesQlItem),
+                         ('testNodesItem { count '
+                          'testNodesItem_nodes: nodes { nodeElem1 nodeElem2 } }'))
+
+    def test_nodes_ql_without_node_alias(self):
+        """ Create and populate a 'nodes' object """
+        node = graphql.NodesQL('item', 'nodeElem1', 'nodeElem2', _node_alias='')
+        self.assertEqual(str(node),
+                         'item { nodes { nodeElem1 nodeElem2 } }')
+
+    def test_graphql_nodes_ql_no_initial_items(self):
+        """ Test creating a 'field { nodes { items } }' query """
+        nodes_query = graphql.NodesQL('project', id=12)
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes {  } }')
+        nodes_query.add_to_nodes('item1', 'item2')
+        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { '
+                                            'project_nodes: nodes { item1 item2 } }'))
+
+    def test_graphql_nodes_ql_with_initial_items(self):
+        """ Test creating a 'field { nodes { items } }' query """
+        nodes_query = graphql.NodesQL('project', 'item1', id=12)
+        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { '
+                                            'project_nodes: nodes { item1 } }'))
+        nodes_query.add_to_nodes('item2')
+        self.assertEqual(str(nodes_query), ('project(id: "gid://12") { project_nodes: '
+                                            'nodes { item1 item2 } }'))
+
+    def test_graphql_nodes_ql_with_custom_nodes(self):
+        """ Test creating a 'field { nodes { items } }' query """
+        nodes_items = graphql.GraphQLNode('', 'item1')
+        nodes_query = graphql.NodesQL('project', _node=nodes_items, id=12)
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { nodes { item1 } }')
+        nodes_query.add_to_nodes('item2')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { nodes { item1 item2 } }')
+        # Internal 'nodes' is a reference to 'nodes_items'
+        self.assertEqual(str(nodes_items), '{ item1 item2 }')
+        # Duplicated items are removed and added to the end
+        nodes_items.add('item1', 'item3')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { nodes { item2 item1 item3 } }')
+        # Add extra parameters
+        nodes_query.add(name='name')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12", name: "name") '
+                                           '{ nodes { item2 item1 item3 } }')
+
+    def test_graphql_nodes_ql_with_custom_named_nodes(self):
+        """ Test creating a 'field { noName { items } }' query """
+        nodes_items = graphql.GraphQLNode('noName', 'item1')
+        nodes_query = graphql.NodesQL('project', _node=nodes_items, id=12)
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { noName: nodes { item1 } }')
+        nodes_query.add_to_nodes('item2')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { noName: nodes { item1 item2 } }')
+        # Internal 'nodes' is a reference to 'nodes_items'
+        self.assertEqual(str(nodes_items), 'noName { item1 item2 }')
+        # Duplicated items are removed and added to the end
+        nodes_items.add('item1', 'item3')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { noName: nodes { item2 item1 item3 } }')
+        # Add extra parameters
+        nodes_query.add(name='name')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12", name: "name") '
+                                           '{ noName: nodes { item2 item1 item3 } }')
+
 
 class TestFindMethods(TestCase):
     """ Unit test for find_in_dict

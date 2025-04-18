@@ -284,19 +284,26 @@ class NodesQL(GraphQLNode):
         """
         _alias = kwargs.pop('_alias') if '_alias' in kwargs else ''
         _node = kwargs.pop('_node') if '_node' in kwargs else False
+        _top = kwargs.pop('_top') if '_top' in kwargs else []
         node_alias = _node_alias if _node_alias is not None else f'{_name}_nodes'
         if _node:
             if not isinstance(_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
             self.node = _node
             nude_node_name = self.node.alias if self.node.alias else self.node.name
-            node_alias = nude_node_name if nude_node_name and not _node_alias else node_alias
+            if _node_alias:
+                nude_node_name = _node_alias
+            elif nude_node_name:
+                node_alias = nude_node_name
+            else:
+                node_alias = None
             if len(args) != 0:
                 pass  # What to do if there are args? Ignore them looks safe
         else:
+            node_alias = node_alias if node_alias or _node_alias else None
             self.node = GraphQLNode(node_alias, *args)
         self.alias_node = GraphQLNode('nodes', _node=self.node, _alias=node_alias)
-        super().__init__(_name, self.alias_node, _alias=_alias, **kwargs)
+        super().__init__(_name, *_top, self.alias_node, _alias=_alias, **kwargs)
 
     def add_to_nodes(self, *args):
         """
