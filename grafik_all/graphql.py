@@ -289,7 +289,8 @@ class NodesQL(GraphQLNode):
             if not isinstance(_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
             self.node = _node
-            node_alias = self.node.name if self.node.name and not _node_alias else node_alias
+            nude_node_name = self.node.alias if self.node.alias else self.node.name
+            node_alias = nude_node_name if nude_node_name and not _node_alias else node_alias
             if len(args) != 0:
                 pass  # What to do if there are args? Ignore them looks safe
         else:
@@ -352,6 +353,10 @@ class GraphQLEnum:
         """ Enum tests are case-insensitive """
         return self._name.lower() == str(other).lower()
 
+    def __hash__(self):
+        """ Hash the lowercase string """
+        return hash(self._name.lower())
+
 
 def AutoNode(base_class):
     """
@@ -366,9 +371,10 @@ def AutoNode(base_class):
         def __init__(self, node_items) -> None:
             assert issubclass(base_class, GraphQLNode)
             self._node_func = node_items
-            self._name = node_items.__name__[0].lower() + node_items.__name__[1:]
             self.__doc__ = node_items.__doc__
             self._items, self._params = node_items()
+            self._name = self._params.pop('_name') if '_name' in self._params \
+                        else node_items.__name__[0].lower() + node_items.__name__[1:]
             super().__init__(self._name, *self._items, **self._params)
             self._constant = True
 
