@@ -4,31 +4,42 @@ GraphQL basic node
 # pylint: disable=protected-access
 
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 
-def find_in_dict(dictionary: dict, item: str, value: Optional[Any] = None):
+def find_in_dict(dictionary: dict, items: Union[str, list],
+                 values: Optional[Any] = None,
+                 depth: Optional[int] = -1):
     """
-    Find item in dictionary
+    Find items in dictionary by name
     """
+    values = [] if not values else values
+    if not isinstance(items, list):
+        items = [items]
+    if not isinstance(values, list):
+        values = [values]
     if isinstance(dictionary, dict):
-        if item in dictionary:
-            if value is None or dictionary[item] == value:
-                yield (dictionary[item], dictionary)
+        for i in items:
+            if i in dictionary and (not values or dictionary[i] in values):
+                yield (dictionary[i], dictionary)
+        if depth == 0:
+            return
         for _, i in dictionary.items():
             if isinstance(i, (list, dict)):
-                yield from find_in_dict(i, item, value)
+                yield from find_in_dict(i, items, values=values, depth=depth - 1)
     if isinstance(dictionary, list):
         for i in dictionary:
-            if isinstance(i, (list, dict)):
-                yield from find_in_dict(i, item, value)
+            if isinstance(i, (list, dict)) and depth != 0:
+                yield from find_in_dict(i, items, values=values, depth=depth - 1)
 
 
-def find_all_values(dictionary: dict, item: str, value: Optional[Any] = None):
+def find_all_items(dictionary: dict, items: str,
+                   values: Optional[Any] = None,
+                   depth: Optional[int] = -1):
     """
-    Find all entries in dictionary matching 'item' and return a list of values
+    Find all entries in dictionary matching 'items' and return a list of values
     """
-    non_flat = [x for x, _ in find_in_dict(dictionary, item, value)]
+    non_flat = [x for x, _ in find_in_dict(dictionary, items, values, depth)]
     flat = []
     for x in non_flat:
         if isinstance(x, list):
@@ -37,11 +48,13 @@ def find_all_values(dictionary: dict, item: str, value: Optional[Any] = None):
             flat.append(x)
     return flat
 
-def find_all_containers(dictionary: dict, item: str, value: Optional[Any] = None):
+def find_all_containers(dictionary: dict, items: str,
+                        values: Optional[Any] = None,
+                        depth: Optional[int] = -1):
     """
-    Find all entries in dictionary matching 'item' and return a list of values
+    Find all entries in dictionary matching 'items' and return a list of values
     """
-    return [x for _, x in find_in_dict(dictionary, item, value)]
+    return [x for _, x in find_in_dict(dictionary, items, values, depth)]
 
 
 def _param_to_graphql_rep(item: any):

@@ -254,8 +254,8 @@ class TestNodesQL(TestCase):
     def test_nodes_ql_with_top_using_autonode(self):
         """ Create and populate a 'nodes' object including count """
         self.assertEqual(str(NodesQlItem),
-                         ('testNodesItem { count '
-                          'testNodesItem_nodes: nodes { nodeElem1 nodeElem2 } }'))
+                         ('nodesQlItem { count '
+                          'nodesQlItem_nodes: nodes { nodeElem1 nodeElem2 } }'))
 
     def test_nodes_ql_without_node_alias(self):
         """ Create and populate a 'nodes' object """
@@ -319,10 +319,10 @@ class TestFindMethods(TestCase):
     """ Unit test for find_in_dict
     """
 
-    def test_find_all_values(self):
+    def test_find_all_items(self):
         """ Assert all found nodes have the right value """
-        data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_all_values.yml')
-        found = graphql.find_all_values(data, 'pipeline_nodes')
+        data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_all_items.yml')
+        found = graphql.find_all_items(data, 'pipeline_nodes')
         self.maxDiff = None
         self.assertListEqual(found, reference)
 
@@ -330,6 +330,20 @@ class TestFindMethods(TestCase):
         """ Assert all found nodes have the right value """
         data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_all_containers.yml')
         found = graphql.find_all_containers(data, 'iid')
+        self.maxDiff = None
+        self.assertListEqual(found, reference)
+
+    def test_find_multiple_items(self):
+        """ Assert all found nodes have the right value """
+        data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_multiple_items.yml')
+        found = graphql.find_all_items(data, ['iid', 'status'])
+        self.maxDiff = None
+        self.assertListEqual(found, reference)
+
+    def test_find_all_containers_with_value(self):
+        """ Assert all found nodes have the right value """
+        data, reference = load_yaml_data(f'{TEST_DIR}/data/test_find_all_done_items.yml')
+        found = graphql.find_all_containers(data, 'status', values=['done'])
         self.maxDiff = None
         self.assertListEqual(found, reference)
 

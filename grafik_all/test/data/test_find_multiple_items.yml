@@ -1,0 +1,21 @@
+- data:
+    main_pipelines:
+      pipeline_nodes:
+        - iid: 123
+          status: 'done'
+        - iid: 321
+          status: 'running'
+    alt_pipelines:
+      pipeline_nodes:
+        - iid: 234
+          status: 'done'
+        - iid: 432
+          status: 'failed'
+- - 123
+  - 'done'
+  - 321
+  - 'running'
+  - 234
+  - 'done'
+  - 432
+  - 'failed'
