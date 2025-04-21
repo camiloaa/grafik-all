@@ -83,11 +83,21 @@ class GraphQLNode:
     def __init__(self, _name, *args, _alias='', **kwargs):
         """
         Create a node with arbitrary items and parameters.
-        Special parameters start with underscore:
-            - _node: Use _node as a nude item, meaning that the created GraphQLNode
-              will not have any ites, but will treat items in _node as their own.
-              Useful when several nodes share the same items.
-            - _gid_path: Path to use when 'id=value' is used.
+        Special parameters start with underscore. If a parameter starts with
+        underscore but it is not a special paramter, underscores are dropped.
+        This is useful when graphql parameters have the same name of python
+        keywords; for example graphqle parameter 'if' can be passed as '_if'.
+
+        Parameters:
+        :param _alias: Node alias.
+        :param _node: Use _node as a nude item, meaning that the created GraphQLNode
+            will not have any items, but will treat items in _node as their own.
+            Useful when several nodes share the same items.
+        :param _gid_path: Path to use when 'id=value' is used.
+        :param _valid_params: Parameters to be recognized by the graphql node.
+        :param _valid_items: Items to be recognized by the grpahql node.
+
+        Subclasses might have their own special parameters.
         """
         self.name = _name
         self.alias = _alias if _alias else ''
@@ -185,7 +195,7 @@ class GraphQLNode:
 
     def _add_params(self, **kwargs):
         """
-        Add items to the field
+        Add items to the field, initial underscores are dropped.
         """
         # Process special parameters first
         _nude_node: GraphQLNode = kwargs.pop('_node') if '_node' in kwargs else None
@@ -291,21 +301,29 @@ class NodesQL(GraphQLNode):
     A simple 'nodes' wrapper
     """
     def __init__(self, _name, *args,
-                 _node_alias=None, **kwargs):
+                 _nodes_alias=None, **kwargs):
         """
-        Use alias instead of name
+        Items in the '*args' list will be added to the 'nodes' element, and not
+        to the top node.
+
+        Parameters are passed to the top node.
+
+        Parameters:
+        :param _nodes_alias: Alias for the 'nodes' items. Nodes are called '{_name}_nodes'
+            by default. Passing an empty string will remove the alias totally.
+        :param _top: List of items to be added to the top node, instead of 'nodes'.
         """
         _alias = kwargs.pop('_alias') if '_alias' in kwargs else ''
         _node = kwargs.pop('_node') if '_node' in kwargs else False
         _top = kwargs.pop('_top') if '_top' in kwargs else []
-        node_alias = _node_alias if _node_alias is not None else f'{_name}_nodes'
+        node_alias = _nodes_alias if _nodes_alias is not None else f'{_name}_nodes'
         if _node:
             if not isinstance(_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
             self.node = _node
             nude_node_name = self.node.alias if self.node.alias else self.node.name
-            if _node_alias:
-                nude_node_name = _node_alias
+            if _nodes_alias:
+                nude_node_name = _nodes_alias
             elif nude_node_name:
                 node_alias = nude_node_name
             else:
@@ -313,7 +331,7 @@ class NodesQL(GraphQLNode):
             if len(args) != 0:
                 pass  # What to do if there are args? Ignore them looks safe
         else:
-            node_alias = node_alias if node_alias or _node_alias else None
+            node_alias = node_alias if node_alias or _nodes_alias else None
             self.node = GraphQLNode(node_alias, *args)
         self.alias_node = GraphQLNode('nodes', _node=self.node, _alias=node_alias)
         super().__init__(_name, *_top, self.alias_node, _alias=_alias, **kwargs)

@@ -259,7 +259,7 @@ class TestNodesQL(TestCase):
 
     def test_nodes_ql_without_node_alias(self):
         """ Create and populate a 'nodes' object """
-        node = graphql.NodesQL('item', 'nodeElem1', 'nodeElem2', _node_alias='')
+        node = graphql.NodesQL('item', 'nodeElem1', 'nodeElem2', _nodes_alias='')
         self.assertEqual(str(node),
                          'item { nodes { nodeElem1 nodeElem2 } }')
 
