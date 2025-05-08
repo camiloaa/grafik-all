@@ -263,6 +263,17 @@ class TestNodesQL(TestCase):
         self.assertEqual(str(node),
                          'item { nodes { nodeElem1 nodeElem2 } }')
 
+    def test_graphql_replace_items(self):
+        """ Replace items with aliased versions """
+        node = graphql.GraphQLNode('node', 'item1', 'item2')
+        self.assertEqual(str(node), 'node { item1 item2 }')
+        node.add('alias: item2')
+        self.assertEqual(str(node), 'node { item1 alias: item2 }')
+        node.add('newAlias: item2')
+        self.assertEqual(str(node), 'node { item1 newAlias: item2 }')
+        node.add('item2')
+        self.assertEqual(str(node), 'node { item1 item2 }')
+
     def test_graphql_nodes_ql_no_initial_items(self):
         """ Test creating a 'field { nodes { items } }' query """
         nodes_query = graphql.NodesQL('project', id=12)

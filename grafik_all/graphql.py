@@ -48,6 +48,7 @@ def find_all_items(dictionary: dict, items: str,
             flat.append(x)
     return flat
 
+
 def find_all_containers(dictionary: dict, items: str,
                         values: Optional[Any] = None,
                         depth: Optional[int] = -1):
@@ -99,8 +100,13 @@ class GraphQLNode:
 
         Subclasses might have their own special parameters.
         """
-        self.name = _name
-        self.alias = _alias if _alias else ''
+        _name = '' if not _name else _name
+        if not isinstance(_name, str):
+            raise TypeError("_name must be a string")
+        split_name = [i.strip() for i in _name.split(':')]
+        self.name = split_name.pop()
+        other_alias = ''.join(split_name)
+        self.alias = _alias if _alias else other_alias
         self.params = {}
         self.items = []
         self._nude = False
@@ -285,7 +291,9 @@ class GraphQLNode:
 
     def __eq__(self, other):
         if isinstance(other, str):
-            return self.name == other or f'{self.alias}: {self.name}' == other
+            test_other = other.split(':').pop().strip()
+            return self.name == test_other \
+                or f'{self.alias}: {self.name}' == test_other
         if isinstance(other, GraphQLNode):
             return self.name == other.name and self.alias == other.alias
         return False
