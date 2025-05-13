@@ -106,6 +106,8 @@ class GraphQLNode:
             raise TypeError("_name must be a string")
         split_name = [i.strip() for i in _name.split(':')]
         self.name = split_name.pop()
+        if self.name and not self.name.isidentifier():
+            raise TypeError(f"_name {self.name} must be alphanumeric")
         other_alias = ''.join(split_name)
         self.alias = _alias if _alias else other_alias
         self.params = {}
@@ -271,7 +273,7 @@ class GraphQLNode:
             # Add params if they exist
             field = f'{field}({self._params_to_string()})'
         if self.items:
-            # Add curly bracets around items if necessary
+            # Add curly brackets around items if necessary
             field = field + ' ' if field else field
             field = field + '{' if not nude else field
             if field:
@@ -281,7 +283,7 @@ class GraphQLNode:
             if not nude:
                 lines.append(spaces + '}')
         else:
-            lines = [field]
+            lines = [spaces + field]
         return separator.join(lines)
 
     def __repr__(self):
@@ -291,13 +293,33 @@ class GraphQLNode:
         return self._to_string()
 
     def __eq__(self, other):
+        """Return true if two nodes would return the same id in a query
+           That would be the case if they have the same alias,
+           or if one'a alias is the same name as the other's name
+        """
+        other_alias = ''
+        other_name = ''
         if isinstance(other, str):
-            test_other = other.split(':').pop().strip()
-            return self.name == test_other \
-                or f'{self.alias}: {self.name}' == test_other
+            n = other.split(':')
+            other_name = n.pop().strip()
+            other_alias = n.pop().strip() if n else ''
         if isinstance(other, GraphQLNode):
-            return self.name == other.name and self.alias == other.alias
-        return False
+            other_name = other.name
+            other_alias = other.alias if other.alias else ''
+        if self.alias and other_alias:
+            return self.alias == other_alias
+        if self.name and other_name and (self.alias or other_alias):
+            return self.alias == other_name or self.name == other_name or self.name == other_alias
+        return self.name == other_name
+
+    def __getitem__(self, index):
+        """Access an item"""
+        if self._nude:
+            return self.items[0][index]
+        for i, v in enumerate(self.items):
+            if v == index:
+                return self.items[i]
+        raise IndexError(f"No such item {index}")
 
     def __call__(self, *args, **kwargs):
         """"""
