@@ -5,6 +5,7 @@ GraphQL basic node
 
 
 from typing import Any, Optional, Union
+from types import FunctionType
 
 
 def find_in_dict(dictionary: dict, items: Union[str, list],
@@ -373,11 +374,21 @@ class GraphQLEnum:
     The final result is a case-insensitive string.
     It can be compared, but not assigned, to strings.
     """
-    def __init__(self, getitems):
-        self._getitems = getitems
-        self._name = getitems.__name__
-        self.__doc__ = getitems.__doc__
-        self._items = getitems(self)
+    def __init__(self, *args, **kwargs):
+        args = list(args)
+        if args and isinstance(args[0], FunctionType):
+            getitems = args.pop(0)
+            self._getitems = getitems
+            self._name = getitems.__name__
+            self.__doc__ = getitems.__doc__
+            self._items = getitems(self)
+        elif kwargs:
+            self._getitems = None
+            self._name = kwargs.pop('name')
+            self.__doc__ = kwargs.pop('doc') if 'doc' in kwargs else ''
+            self._items = kwargs.pop('items') if 'items' in kwargs else {}
+        if kwargs or args:
+            raise ValueError("Invalid parameters")
 
     def __getattr__(self, item):
         if item in {'__name__', '__qualname__'}:

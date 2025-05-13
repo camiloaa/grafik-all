@@ -116,6 +116,11 @@ class TestGraphQLEnums(TestCase):
         basic = graphql.GraphQLNode('project', 'item', name=CONSTANT)
         self.assertEqual(str(basic), 'project(name: CONSTANT) { item }')
 
+    def test_create_graphql_enum_with_constructor(self):
+        """ Creating a enum using the constructor give the same result as decorator """
+        constant = graphql.GraphQLEnum(name='CONSTANT')
+        self.assertEqual(str(constant), str(CONSTANT))
+
 
 @graphql.AutoNode(graphql.GraphQLNode)
 def TestNode(*_, **__) -> graphql.GraphQLNode:
