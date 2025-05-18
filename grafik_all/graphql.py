@@ -120,6 +120,18 @@ class GraphQLNode:
         self._add_params(**kwargs)  # self._params is a shallow copy of kwargs
         self.add(*args)
 
+    def items(self):
+        """Return items"""
+        if self._nude:
+            return self._items[0].items()
+        return self._items
+
+    def params(self):
+        """Return items"""
+        if self._nude:
+            return self._items[0].params()
+        return self._params
+
     def add(self, *args, **kwargs):
         """
         Add items or parameters to the node
@@ -142,6 +154,17 @@ class GraphQLNode:
             if isinstance(item, GraphQLNode):
                 item.add(*args, **kwargs)
         return self
+
+    def update(self, other):
+        """
+        """
+        if not isinstance(other, GraphQLNode):
+            raise TypeError(f"Update requires a GraphQLNode")
+        if self._nude:
+            self._items[0].add(*other.items())
+        else:
+            self.add(*other.items())
+        self.add(**other.params())
 
     def first(self, first: int):
         """
@@ -180,6 +203,9 @@ class GraphQLNode:
             if other_id and other_id.pop() != i:
                 return ''
         return id_num if id_num.isdigit() else ''
+
+    def pretty(self, indentation=2):
+        return self._to_string(indentation, indentation, '\n')
 
     def _drop(self, item):
         if item in self._items:
@@ -248,24 +274,24 @@ class GraphQLNode:
             params.append(f'{i}: {_param_to_graphql_rep(v)}')
         return ", ".join(params)
 
-    def _items_to_string(self, indentation, separator):
+    def _items_to_string(self, indentation, size, separator):
         spaces = ' ' * indentation
-        next_indention = indentation + 2 if indentation > 0 else 0
+        next_indentation = indentation + 2 if indentation > 0 else 0
         for item in self._items:
             if not isinstance(item, GraphQLNode):
                 yield spaces + str(item)
             else:
-                yield item._to_string(next_indention, separator, self._nude)
+                yield item._to_string(next_indentation, size, separator, self._nude)
 
-    def _to_string(self, indentation=0, separator=' ', nude=False):
+    def _to_string(self, indentation=0, size=2, separator=' ', nude=False):
         """
         Convert node to a string representation
         """
         lines = []
-        spaces = ' ' * (indentation - 2)
+        spaces = ' ' * (indentation - size)
         # Start with the name
         if nude:
-            indentation = indentation - 2
+            indentation = indentation - size
             field = ''
         else:
             field = f'{self._alias}: {self._name}' if self._alias else self._name
@@ -279,7 +305,7 @@ class GraphQLNode:
             if field:
                 lines.append(spaces + field)
             # Finally, add all the fields
-            lines.extend(list(self._items_to_string(indentation, separator)))
+            lines.extend(list(self._items_to_string(indentation, size, separator)))
             if not nude:
                 lines.append(spaces + '}')
         else:
@@ -287,9 +313,6 @@ class GraphQLNode:
         return separator.join(lines)
 
     def __repr__(self):
-        return self._to_string(2, '\n')
-
-    def __str__(self):
         return self._to_string()
 
     def __eq__(self, other):

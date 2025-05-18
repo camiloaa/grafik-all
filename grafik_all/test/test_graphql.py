@@ -93,6 +93,34 @@ class TestGraphQL(TestCase):
                                      'subproject(text: "free") { subitem new } '
                                      'other(text: "free") { otheritem new } }')
 
+    def test_update_graphql_node_items(self):
+        """Node can be updated with items from other node"""
+        query = graphql.GraphQLNode('project', 'id', 'nodes')
+        other = graphql.GraphQLNode('other', graphql.GraphQLNode('nodes', 'id', 'iid'))
+        self.assertEqual(str(query), 'project { id nodes }')
+        self.assertEqual(str(other), 'other { nodes { id iid } }')
+        query.update(other)
+        self.assertEqual(str(query), 'project { id nodes { id iid } }')
+
+    def test_update_graphql_node_params(self):
+        """Node can be updated with items from other node"""
+        query = graphql.GraphQLNode('project', 'id', 'nodes')
+        other = graphql.GraphQLNode('other',  id=1)
+        self.assertEqual(str(query), 'project { id nodes }')
+        self.assertEqual(str(other), 'other(id: "gid://1")')
+        query.update(other)
+        self.assertEqual(str(query), 'project(id: "gid://1") { id nodes }')
+
+    def test_update_graphql_nude_node(self):
+        """Nude nodes can be updated with items from other node"""
+        internal = graphql.GraphQLNode('', 'id', 'nodes')
+        query = graphql.GraphQLNode('project', _node=internal)
+        other = graphql.GraphQLNode('other', graphql.GraphQLNode('nodes', 'id', 'iid'), id=1)
+        self.assertEqual(str(query), 'project { id nodes }')
+        self.assertEqual(str(other), 'other(id: "gid://1") { nodes { id iid } }')
+        query.update(other)
+        self.assertEqual(str(query), 'project(id: "gid://1") { id nodes { id iid } }')
+
 
 class TestGraphQLEnums(TestCase):
     """ Unit test for GraphQL Enums
