@@ -6,6 +6,8 @@ from typing import Optional
 from .graphql import GraphQLNode, GraphQLEnum
 
 
+SYNTAX_TOKEN = ['(', ')', '{', '}', ',', ':']
+
 # Reversed regex
 # Parser works on a reversed string.
 token_re = re.compile(r"\w+")
@@ -125,10 +127,13 @@ def _get_graphql_nodes(query: str, closing: str, position: int, env: dict):
     items = []
     params = {}
     nodes = []
+    prev_token = ''
     token, removed, query = _get_next_token(query)
     while token:
         position -= removed
         if token == ',':
+            if prev_token in SYNTAX_TOKEN:
+                raise SyntaxError(f"Invalid identifier {token} in position {position}")
             pass  # Commas are optional
         elif token == '}':
             items, position, query = _get_graphql_nodes(query, '{', position, env)
@@ -146,15 +151,12 @@ def _get_graphql_nodes(query: str, closing: str, position: int, env: dict):
                 if not alias:
                     raise SyntaxError(f"Invalid separator ':' in position {position}")
                 token = f"{alias}: {token}"
-            if items or params:
-                #print(items, f"'{token}'", params)
-                nodes.insert(0, GraphQLNode(token, *items, **params))
-                items = []
-                params = {}
-            else:
-                nodes.insert(0, token)
+            nodes.insert(0, GraphQLNode(token, *items, **params))
+            items = []
+            params = {}
         else:
             raise SyntaxError(f"Invalid identifier {token} in position {position}")
+        prev_token = token
         token, removed, query = _get_next_token(query)
     if closing:
         raise SyntaxError(f"Missing token '{closing}' in position {position}")

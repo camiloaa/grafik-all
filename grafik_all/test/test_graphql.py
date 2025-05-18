@@ -105,7 +105,7 @@ class TestGraphQL(TestCase):
     def test_update_graphql_node_params(self):
         """Node can be updated with items from other node"""
         query = graphql.GraphQLNode('project', 'id', 'nodes')
-        other = graphql.GraphQLNode('other',  id=1)
+        other = graphql.GraphQLNode('other', id=1)
         self.assertEqual(str(query), 'project { id nodes }')
         self.assertEqual(str(other), 'other(id: "gid://1")')
         query.update(other)
