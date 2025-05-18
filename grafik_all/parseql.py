@@ -26,60 +26,53 @@ def sanitize_query(query: str):
     return " ".join(lines)[::-1]
 
 
-def parse_params(params: str):
-    """Parse parameters and return a python dictionary that can be used as **kwargs"""
-    if not params.endswith(')'):
-        raise SyntaxError(f"Missing ')' in ({params}")
-    params.split('')
-
-
-def get_stripped(text: str, to_remove: int):
+def _get_stripped(text: str, to_remove: int):
     """Strip text and return how many characters were removed"""
     lenght = len(text)
     text = text[to_remove:].strip()
     return lenght - len(text), text
 
 
-def get_next_token(query: str):
+def _get_next_token(query: str):
     """Get next item name and alias or syntax token"""
-    removed, query = get_stripped(query, 0)
+    removed, query = _get_stripped(query, 0)
     if not query:
         return '', removed, query
     # alphanumeric token
     token = token_re.match(query)
     if token:
         token = token.group()
-        s, query = get_stripped(query, len(token))
+        s, query = _get_stripped(query, len(token))
         removed += s
         return f"{token[::-1]}", removed, query
     # string
     token = string_re.match(query)
     if token:
         token = token.group()
-        s, query = get_stripped(query, len(token))
+        s, query = _get_stripped(query, len(token))
         removed += s
         return f"{token[::-1]}", removed, query
 
     # Default token is next char
     r = query[0]
-    s, query = get_stripped(query, 1)
+    s, query = _get_stripped(query, 1)
     removed += s
     return r, removed, query
 
 
-def get_graphql_params(query: str, closing: str, position: int, env: dict):
+def _parse_params(query: str, closing: str, position: int, env: dict):
     """Get graphql parameters for the given depth"""
     params = {}
     value = None
     waiting_value = True
-    token, removed, query = get_next_token(query)
+    token, removed, query = _get_next_token(query)
     while token:
         #print(token)
         position -= removed
         if token == closing:
             return params, position, query
         elif waiting_value and token == '}':
-            items, position, query = get_graphql_params(query, '{', position, env)
+            items, position, query = _parse_params(query, '{', position, env)
             waiting_value = False
             value = GraphQLNode('', **items)
         elif token in ['{', '(', ')']:
@@ -121,35 +114,35 @@ def get_graphql_params(query: str, closing: str, position: int, env: dict):
                 waiting_value = True
         else:
             raise SyntaxError(f"Invalid identifier {token} in position {position}")
-        token, removed, query = get_next_token(query)
+        token, removed, query = _get_next_token(query)
     if closing or waiting_value:
         raise SyntaxError(f"Missing token '{closing}' in position {position}")
     return params, position, query
 
 
-def get_graphql_nodes(query: str, closing: str, position: int, env: dict):
-    """Get graphql parameters for the given depth"""
+def _get_graphql_nodes(query: str, closing: str, position: int, env: dict):
+    """Get graphql nodes for the given depth"""
     items = []
     params = {}
     nodes = []
-    token, removed, query = get_next_token(query)
+    token, removed, query = _get_next_token(query)
     while token:
         position -= removed
         if token == ',':
             pass  # Commas are optional
         elif token == '}':
-            items, position, query = get_graphql_nodes(query, '{', position, env)
+            items, position, query = _get_graphql_nodes(query, '{', position, env)
         elif token == ')':
-            params, position, query = get_graphql_params(query, '(', position, env)
+            params, position, query = _parse_params(query, '(', position, env)
         elif token == closing:
             return nodes, position, query
         elif token in ['{', '(']:
             raise SyntaxError(f"Unmatched token '{token}' in position {position}")
         elif token.isidentifier():
             if query.startswith(':'):  # There is an alias for this identifier
-                s, query = get_stripped(query, 1)
+                s, query = _get_stripped(query, 1)
                 position = position - s
-                alias, removed, query = get_next_token(query)
+                alias, removed, query = _get_next_token(query)
                 if not alias:
                     raise SyntaxError(f"Invalid separator ':' in position {position}")
                 token = f"{alias}: {token}"
@@ -162,7 +155,7 @@ def get_graphql_nodes(query: str, closing: str, position: int, env: dict):
                 nodes.insert(0, token)
         else:
             raise SyntaxError(f"Invalid identifier {token} in position {position}")
-        token, removed, query = get_next_token(query)
+        token, removed, query = _get_next_token(query)
     if closing:
         raise SyntaxError(f"Missing token '{closing}' in position {position}")
     if items or params:
@@ -176,5 +169,5 @@ def string_to_graphql(query: str, env: Optional[dict] = None):
     env = env if env else {}
     query = sanitize_query(query)
     position = len(query)
-    nodes, *_ = get_graphql_nodes(query, '', position, env)
+    nodes, *_ = _get_graphql_nodes(query, '', position, env)
     return nodes

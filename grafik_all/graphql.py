@@ -105,19 +105,19 @@ class GraphQLNode:
         if not isinstance(_name, str):
             raise TypeError("_name must be a string")
         split_name = [i.strip() for i in _name.split(':')]
-        self.name = split_name.pop()
-        if self.name and not self.name.isidentifier():
-            raise TypeError(f"_name {self.name} must be alphanumeric")
+        self._name = split_name.pop()
+        if self._name and not self._name.isidentifier():
+            raise TypeError(f"_name {self._name} must be alphanumeric")
         other_alias = ''.join(split_name)
-        self.alias = _alias if _alias else other_alias
-        self.params = {}
-        self.items = []
+        self._alias = _alias if _alias else other_alias
+        self._params = {}
+        self._items = []
         self._nude = False
         self._constant = False
         self._valid_params = None
         self._valid_items = None
         self._gid_path = ''
-        self._add_params(**kwargs)  # self.params is a shallow copy of kwargs
+        self._add_params(**kwargs)  # self._params is a shallow copy of kwargs
         self.add(*args)
 
     def add(self, *args, **kwargs):
@@ -138,7 +138,7 @@ class GraphQLNode:
         """
         if self._constant:
             raise TypeError("Cannot update a const!")
-        for item in self.items:
+        for item in self._items:
             if isinstance(item, GraphQLNode):
                 item.add(*args, **kwargs)
         return self
@@ -182,8 +182,8 @@ class GraphQLNode:
         return id_num if id_num.isdigit() else ''
 
     def _drop(self, item):
-        if item in self.items:
-            self.items.remove(item)
+        if item in self._items:
+            self._items.remove(item)
         elif isinstance(item, str):
             i = GraphQLNode(item)
             self._drop(i)
@@ -193,14 +193,14 @@ class GraphQLNode:
         Add items to the field
         """
         if self._nude:
-            self.items[0].add(*args)
+            self._items[0].add(*args)
             return
         for item in args:
             if self._valid_items is not None and item not in self._valid_items:
                 error_msg = f"Item '{item}' is not valid"
                 raise ValueError(error_msg)
             self._drop(item)
-            self.items.append(item)
+            self._items.append(item)
 
     def _add_params(self, **kwargs):
         """
@@ -215,7 +215,7 @@ class GraphQLNode:
             if not isinstance(_nude_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
             self._nude = _nude_node is not None
-            self.items = [_nude_node]
+            self._items = [_nude_node]
         self._valid_params = _valid_params if _valid_params is not None else self._valid_params
         self._valid_items = _valid_items if _valid_items is not None else self._valid_items
         self._gid_path = _gid_path if _gid_path is not None else self._gid_path
@@ -226,7 +226,7 @@ class GraphQLNode:
             if self._valid_params is not None and i not in self._valid_params:
                 error_msg = f"Parameter '{i}' is not valid"
                 raise ValueError(error_msg)
-            self.params[i] = v
+            self._params[i] = v
 
     def _get_gid(self, _gid_path, _id):
         if not str(_id).startswith('gid://'):
@@ -244,14 +244,14 @@ class GraphQLNode:
 
     def _params_to_string(self):
         params = []
-        for i, v in self.params.items():
+        for i, v in self._params.items():
             params.append(f'{i}: {_param_to_graphql_rep(v)}')
         return ", ".join(params)
 
     def _items_to_string(self, indentation, separator):
         spaces = ' ' * indentation
         next_indention = indentation + 2 if indentation > 0 else 0
-        for item in self.items:
+        for item in self._items:
             if not isinstance(item, GraphQLNode):
                 yield spaces + str(item)
             else:
@@ -268,11 +268,11 @@ class GraphQLNode:
             indentation = indentation - 2
             field = ''
         else:
-            field = f'{self.alias}: {self.name}' if self.alias else self.name
-        if self.params and not nude:
+            field = f'{self._alias}: {self._name}' if self._alias else self._name
+        if self._params and not nude:
             # Add params if they exist
             field = f'{field}({self._params_to_string()})'
-        if self.items:
+        if self._items:
             # Add curly brackets around items if necessary
             field = field + ' ' if field else field
             field = field + '{' if not nude else field
@@ -304,21 +304,21 @@ class GraphQLNode:
             other_name = n.pop().strip()
             other_alias = n.pop().strip() if n else ''
         if isinstance(other, GraphQLNode):
-            other_name = other.name
-            other_alias = other.alias if other.alias else ''
-        if self.alias and other_alias:
-            return self.alias == other_alias
-        if self.name and other_name and (self.alias or other_alias):
-            return self.alias == other_name or self.name == other_name or self.name == other_alias
-        return self.name == other_name
+            other_name = other._name
+            other_alias = other._alias if other._alias else ''
+        if self._alias and other_alias:
+            return self._alias == other_alias
+        if self._name and other_name and (self._alias or other_alias):
+            return self._alias == other_name or self._name == other_name or self._name == other_alias
+        return self._name == other_name
 
     def __getitem__(self, index):
         """Access an item"""
         if self._nude:
-            return self.items[0][index]
-        for i, v in enumerate(self.items):
+            return self._items[0][index]
+        for i, v in enumerate(self._items):
             if v == index:
-                return self.items[i]
+                return self._items[i]
         raise IndexError(f"No such item {index}")
 
     def __call__(self, *args, **kwargs):
@@ -345,14 +345,14 @@ class NodesQL(GraphQLNode):
         :param _top: List of items to be added to the top node, instead of 'nodes'.
         """
         _alias = kwargs.pop('_alias') if '_alias' in kwargs else ''
-        _node = kwargs.pop('_node') if '_node' in kwargs else False
+        _node: GraphQLNode = kwargs.pop('_node') if '_node' in kwargs else False
         _top = kwargs.pop('_top') if '_top' in kwargs else []
         node_alias = _nodes_alias if _nodes_alias is not None else f'{_name}_nodes'
         if _node:
             if not isinstance(_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
             self.node = _node
-            nude_node_name = self.node.alias if self.node.alias else self.node.name
+            nude_node_name = self.node._alias if self.node._alias else self.node._name
             if _nodes_alias:
                 nude_node_name = _nodes_alias
             elif nude_node_name:
@@ -371,7 +371,7 @@ class NodesQL(GraphQLNode):
         """
         Add items to the 'nodes' item
         """
-        self.node.items.extend(list(args))
+        self.node._items.extend(list(args))
 
 
 class GraphQLInput(GraphQLNode):
@@ -451,20 +451,22 @@ def AutoNode(base_class):
             assert issubclass(base_class, GraphQLNode)
             self._node_func = node_items
             self.__doc__ = node_items.__doc__
-            self._items, self._params = node_items()
-            self._name = self._params.pop('_name') if '_name' in self._params \
+            self._derived_items, self._derived_params = node_items()
+            self._derived_name = self._derived_params.pop('_name') \
+                        if '_name' in self._derived_params \
                         else node_items.__name__[0].lower() + node_items.__name__[1:]
-            super().__init__(self._name, *self._items, **self._params)
+            super().__init__(self._derived_name,
+                             *self._derived_items, **self._derived_params)
             self._constant = True
 
         def __call__(self, *args, **kwargs) -> GraphQLNode:
             """ Calling the decorated method will work as a constructor """
-            for i, v in self._params.items():
+            for i, v in self._derived_params.items():
                 if i not in kwargs:
                     kwargs[i] = v
             if '_node' in kwargs:  # Use node attributes if a node is provided
-                return base_class(self.name, *args, **kwargs)
-            return base_class(self.name, *self._items, *args, **kwargs)
+                return base_class(self._name, *args, **kwargs)
+            return base_class(self._name, *self._derived_items, *args, **kwargs)
 
     return DerivedNode
 
