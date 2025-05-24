@@ -7,8 +7,8 @@ Test graphql module
 
 
 import os
-import yaml
 from unittest import TestCase
+import yaml
 from grafik_all import graphql
 
 
@@ -23,7 +23,7 @@ def load_yaml_data(filename: str):
 
 
 @graphql.GraphQLEnum
-def CONSTANT(self):
+def CONSTANT(_):
     """ Text CONSTANT with attributes """
     return {'my_attr': 'MY_ATTR',
             'other': 0}
@@ -45,6 +45,11 @@ class TestGraphQL(TestCase):
         basic.add(graphql.GraphQLNode('nested', 'nestedItem'))
         self.assertEqual(str(basic), 'my_project: project { item1 item2 item3 '
                                      'nested { nestedItem } }')
+
+    def test_graphql_create_from_dict(self):
+        """ Create a node from dictionary """
+        basic = graphql.GraphQLNode('project', {'nodes': ['id', 'iid']})
+        self.assertEqual(str(basic), 'project { nodes { id iid } }')
 
     def test_graphql_add_duplicated(self):
         """ Test adding items to the node """

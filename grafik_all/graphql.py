@@ -4,8 +4,8 @@ GraphQL basic node
 # pylint: disable=protected-access
 
 
-from typing import Any, Optional, Union
 from types import FunctionType
+from typing import Any, Optional, Union
 
 
 def find_in_dict(dictionary: dict, items: Union[str, list],
@@ -86,9 +86,9 @@ class GraphQLNode:
         """
         Create a node with arbitrary items and parameters.
         Special parameters start with underscore. If a parameter starts with
-        underscore but it is not a special paramter, underscores are dropped.
+        underscore but it is not a special parameter, underscores are dropped.
         This is useful when graphql parameters have the same name of python
-        keywords; for example graphqle parameter 'if' can be passed as '_if'.
+        keywords; for example graphql parameter 'if' can be passed as '_if'.
 
         Parameters:
         :param _alias: Node alias.
@@ -97,7 +97,7 @@ class GraphQLNode:
             Useful when several nodes share the same items.
         :param _gid_path: Path to use when 'id=value' is used.
         :param _valid_params: Parameters to be recognized by the graphql node.
-        :param _valid_items: Items to be recognized by the grpahql node.
+        :param _valid_items: Items to be recognized by the graphql node.
 
         Subclasses might have their own special parameters.
         """
@@ -117,8 +117,7 @@ class GraphQLNode:
         self._valid_params = None
         self._valid_items = None
         self._gid_path = ''
-        self._add_params(**kwargs)  # self._params is a shallow copy of kwargs
-        self.add(*args)
+        self.add(*args, **kwargs)
 
     def items(self):
         """Return items"""
@@ -131,6 +130,10 @@ class GraphQLNode:
         if self._nude:
             return self._items[0].params()
         return self._params
+
+    def name(self):
+        """Node name as will be shown in the response"""
+        return self._name if not self._alias else self._alias
 
     def add(self, *args, **kwargs):
         """
@@ -156,10 +159,9 @@ class GraphQLNode:
         return self
 
     def update(self, other):
-        """
-        """
+        """Add the contents of another node to this one"""
         if not isinstance(other, GraphQLNode):
-            raise TypeError(f"Update requires a GraphQLNode")
+            raise TypeError(f"Update requires a GraphQLNode. Got {type(other)}")
         if self._nude:
             self._items[0].add(*other.items())
         else:
@@ -205,6 +207,7 @@ class GraphQLNode:
         return id_num if id_num.isdigit() else ''
 
     def pretty(self, indentation=2):
+        """Print a pretty version of this node"""
         return self._to_string(indentation, indentation, '\n')
 
     def _drop(self, item):
@@ -225,8 +228,16 @@ class GraphQLNode:
             if self._valid_items is not None and item not in self._valid_items:
                 error_msg = f"Item '{item}' is not valid"
                 raise ValueError(error_msg)
-            self._drop(item)
-            self._items.append(item)
+            if isinstance(item, (GraphQLNode, str)):
+                self._drop(item)
+                self._items.append(item)
+            elif isinstance(item, dict):
+                for i, v in item.items():
+                    t_item = GraphQLNode(i, *v)
+                    self._drop(t_item)
+                    self._items.append(t_item)
+            else:
+                raise TypeError(f"Invalid type for item {item} ({type(item)})")
 
     def _add_params(self, **kwargs):
         """
@@ -348,6 +359,10 @@ class GraphQLNode:
         """"""
         self.add(*args, **kwargs)
         return self
+
+    def __hash__(self):
+        """ Hash the lowercase string """
+        return hash(self.name())
 
 
 class NodesQL(GraphQLNode):
@@ -476,8 +491,8 @@ def AutoNode(base_class):
             self.__doc__ = node_items.__doc__
             self._derived_items, self._derived_params = node_items()
             self._derived_name = self._derived_params.pop('_name') \
-                        if '_name' in self._derived_params \
-                        else node_items.__name__[0].lower() + node_items.__name__[1:]
+                if '_name' in self._derived_params \
+                else node_items.__name__[0].lower() + node_items.__name__[1:]
             super().__init__(self._derived_name,
                              *self._derived_items, **self._derived_params)
             self._constant = True

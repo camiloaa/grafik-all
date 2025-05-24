@@ -131,10 +131,9 @@ def _get_graphql_nodes(query: str, closing: str, position: int, env: dict):
     token, removed, query = _get_next_token(query)
     while token:
         position -= removed
-        if token == ',':
+        if token == ',':  # Commas are optional
             if prev_token in SYNTAX_TOKEN:
                 raise SyntaxError(f"Invalid identifier {token} in position {position}")
-            pass  # Commas are optional
         elif token == '}':
             items, position, query = _get_graphql_nodes(query, '{', position, env)
         elif token == ')':
@@ -167,7 +166,17 @@ def _get_graphql_nodes(query: str, closing: str, position: int, env: dict):
 
 
 def string_to_graphql(query: str, env: Optional[dict] = None):
-    """Parse a graphql query and transform it into a GraphqlNode"""
+    """
+    Parse a graphql query and transform it into a GraphqlNode.
+    All generated items are of type GraphQLNode to make it easier to further modify the
+    resulting nodes.
+
+    :param str query: The graphql query to be parsed
+    :param dict env: Dictionary to be use as environment to parse $VAR symbols
+    :return: List of parsed nodes
+    :raises SyntaxError: If a syntax error is found
+    :raises ValueError: If the requested environment variable doesn't exist
+    """
     env = env if env else {}
     query = sanitize_query(query)
     position = len(query)
