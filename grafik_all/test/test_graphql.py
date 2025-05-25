@@ -317,7 +317,7 @@ class TestNodesQL(TestCase):
     def test_graphql_nodes_ql_no_initial_items(self):
         """ Test creating a 'field { nodes { items } }' query """
         nodes_query = graphql.NodesQL('project', id=12)
-        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes {  } }')
+        self.assertEqual(str(nodes_query), 'project(id: "gid://12") { project_nodes: nodes { } }')
         nodes_query.add_to_nodes('item1', 'item2')
         self.assertEqual(str(nodes_query), ('project(id: "gid://12") { '
                                             'project_nodes: nodes { item1 item2 } }'))

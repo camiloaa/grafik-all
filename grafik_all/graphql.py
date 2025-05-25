@@ -112,7 +112,7 @@ class GraphQLNode:
         self._alias = _alias if _alias else other_alias
         self._params = {}
         self._items = []
-        self._nude = False
+        self._nude = None
         self._constant = False
         self._valid_params = None
         self._valid_items = None
@@ -122,13 +122,13 @@ class GraphQLNode:
     def items(self):
         """Return items"""
         if self._nude:
-            return self._items[0].items()
+            return self._nude.items()
         return self._items
 
     def params(self):
         """Return items"""
         if self._nude:
-            return self._items[0].params()
+            return self._nude.params()
         return self._params
 
     def name(self):
@@ -153,6 +153,8 @@ class GraphQLNode:
         """
         if self._constant:
             raise TypeError("Cannot update a const!")
+        if self._nude:
+            return self._nude.add_to_all(*args, **kwargs)
         for item in self._items:
             if isinstance(item, GraphQLNode):
                 item.add(*args, **kwargs)
@@ -165,7 +167,7 @@ class GraphQLNode:
         if not isinstance(other, GraphQLNode):
             raise TypeError(f"Update requires a GraphQLNode. Got {type(other)}")
         if self._nude:
-            self._items[0].update(other)
+            self._nude.update(other)
         else:
             for i in other.items():
                 existing = self.__getitem__(i, default=None)
@@ -219,6 +221,10 @@ class GraphQLNode:
         return self._to_string(indentation, indentation, '\n')
 
     def _drop(self, item):
+        """ Remove item from node """
+        if self._nude:
+            self._nude._drop(item)
+            return
         if item in self._items:
             self._items.remove(item)
         elif isinstance(item, str):
@@ -230,7 +236,7 @@ class GraphQLNode:
         Add items to the field
         """
         if self._nude:
-            self._items[0].add(*args)
+            self._nude.add(*args)
             return
         for item in args:
             if self._valid_items is not None and item not in self._valid_items:
@@ -259,8 +265,7 @@ class GraphQLNode:
         if _nude_node:
             if not isinstance(_nude_node, GraphQLNode):
                 raise ValueError('Nude items must be of type GraphQLNode')
-            self._nude = _nude_node is not None
-            self._items = [_nude_node]
+            self._nude = _nude_node
         self._valid_params = _valid_params if _valid_params is not None else self._valid_params
         self._valid_items = _valid_items if _valid_items is not None else self._valid_items
         self._gid_path = _gid_path if _gid_path is not None else self._gid_path
@@ -294,6 +299,10 @@ class GraphQLNode:
         return ", ".join(params)
 
     def _items_to_string(self, indentation, size, separator):
+        """String representation of node's items"""
+        if self._nude:
+            yield from self._nude._items_to_string(indentation, size, separator)
+            return
         spaces = ' ' * indentation
         next_indentation = indentation + 2 if indentation > 0 else 0
         for item in self._items:
@@ -317,7 +326,7 @@ class GraphQLNode:
         if self._params and not nude:
             # Add params if they exist
             field = f'{field}({self._params_to_string()})'
-        if self._items:
+        if self._items or self._nude:
             # Add curly brackets around items if necessary
             field = field + ' ' if field else field
             field = field + '{' if not nude else field
@@ -357,7 +366,7 @@ class GraphQLNode:
     def __getitem__(self, index, **kwargs):
         """Access an item"""
         if self._nude:
-            return self._items[0][index]
+            return self._nude[index]
         for i, v in enumerate(self._items):
             if v == index:
                 return self._items[i]
@@ -419,7 +428,7 @@ class NodesQL(GraphQLNode):
         """
         Add items to the 'nodes' item
         """
-        self.node._items.extend(list(args))
+        self.node.add(*args)
 
 
 class GraphQLInput(GraphQLNode):
