@@ -160,12 +160,20 @@ class GraphQLNode:
 
     def update(self, other):
         """Add the contents of another node to this one"""
+        if self._constant:
+            raise TypeError("Cannot update a const!")
         if not isinstance(other, GraphQLNode):
             raise TypeError(f"Update requires a GraphQLNode. Got {type(other)}")
         if self._nude:
-            self._items[0].add(*other.items())
+            self._items[0].update(other)
         else:
-            self.add(*other.items())
+            for i in other.items():
+                existing = self.__getitem__(i, default=None)
+                if existing and isinstance(existing, GraphQLNode):
+                    if isinstance(i, GraphQLNode):
+                        existing.update(i)
+                    continue  # Do not update if the other item is not a node
+                self.add(i)
         self.add(**other.params())
 
     def first(self, first: int):
@@ -346,14 +354,16 @@ class GraphQLNode:
             return self._alias == other_name or self._name == other_alias
         return self._name == other_name
 
-    def __getitem__(self, index):
+    def __getitem__(self, index, **kwargs):
         """Access an item"""
         if self._nude:
             return self._items[0][index]
         for i, v in enumerate(self._items):
             if v == index:
                 return self._items[i]
-        raise IndexError(f"No such item {index}")
+        if not 'default' in kwargs:
+            raise IndexError(f"No such item {index}")
+        return kwargs['default']
 
     def __call__(self, *args, **kwargs):
         """"""
