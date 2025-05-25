@@ -343,7 +343,7 @@ class GraphQLNode:
         if self._alias and other_alias:
             return self._alias == other_alias
         if self._name and other_name and (self._alias or other_alias):
-            return self._alias == other_name or self._name == other_name or self._name == other_alias
+            return self._alias == other_name or self._name == other_alias
         return self._name == other_name
 
     def __getitem__(self, index):

@@ -302,15 +302,17 @@ class TestNodesQL(TestCase):
                          'item { nodes { nodeElem1 nodeElem2 } }')
 
     def test_graphql_replace_items(self):
-        """ Replace items with aliased versions """
+        """ Items are identified by name or alias.
+            I.e the return id is the only true id
+            because graphql doesn't allow duplicated id's """
         node = graphql.GraphQLNode('node', 'item1', 'item2')
         self.assertEqual(str(node), 'node { item1 item2 }')
-        node.add('alias: item2')
-        self.assertEqual(str(node), 'node { item1 alias: item2 }')
-        node.add('newAlias: item2')
-        self.assertEqual(str(node), 'node { item1 alias: item2 newAlias: item2 }')
-        node.add('item2')
-        self.assertEqual(str(node), 'node { item1 newAlias: item2 item2 }')
+        node.add('alias: item2')  # Item 'alias: item2' is different from 'item2'
+        self.assertEqual(str(node), 'node { item1 item2 alias: item2 }')
+        node.add(graphql.GraphQLNode('alias', 'elem'))  # Item 'alias' replaces 'alias: item2'
+        self.assertEqual(str(node), 'node { item1 item2 alias { elem } }')
+        node.add(graphql.GraphQLNode('item2', 'elem'))
+        self.assertEqual(str(node), 'node { item1 alias { elem } item2 { elem } }')
 
     def test_graphql_nodes_ql_no_initial_items(self):
         """ Test creating a 'field { nodes { items } }' query """
