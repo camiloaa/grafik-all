@@ -135,6 +135,17 @@ class GraphQLNode:
         """Node name as will be shown in the response"""
         return self._name if not self._alias else self._alias
 
+    def eq_name(self, other):
+        """Return true if self and other have same name"""
+        name = ''
+        if isinstance(other, str):
+            name = other.split(':').pop().strip()
+        elif isinstance(other, GraphQLNode):
+            name = other._name
+        else:
+            raise TypeError(f"Cannot compare name to {type(other)}")
+        return self._name == name
+
     def add(self, *args, **kwargs):
         """
         Add items or parameters to the node
@@ -171,9 +182,9 @@ class GraphQLNode:
         else:
             for i in other.items():
                 existing = self.__getitem__(i, default=None)
-                if existing and isinstance(existing, GraphQLNode):
+                if existing and isinstance(existing, GraphQLNode) and existing.eq_name(i):
                     if isinstance(i, GraphQLNode):
-                        existing.update(i)
+                        existing.update(i)  # Update only if they are the same item
                     continue  # Do not update if the other item is not a node
                 self.add(i)
         self.add(**other.params())
@@ -370,7 +381,7 @@ class GraphQLNode:
         for i, v in enumerate(self._items):
             if v == index:
                 return self._items[i]
-        if not 'default' in kwargs:
+        if 'default' not in kwargs:
             raise IndexError(f"No such item {index}")
         return kwargs['default']
 

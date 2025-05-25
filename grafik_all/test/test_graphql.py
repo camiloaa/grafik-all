@@ -126,6 +126,24 @@ class TestGraphQL(TestCase):
         query.update(other)
         self.assertEqual(str(query), 'project(id: "gid://1") { id nodes { id iid } }')
 
+    def test_update_graphql_node_items_recursive(self):
+        """Node can be updated with items from other node"""
+        query = graphql.GraphQLNode('project', 'id', graphql.GraphQLNode('nodes', 'id', 'info'))
+        other = graphql.GraphQLNode('other', graphql.GraphQLNode('nodes', 'id', 'iid'))
+        self.assertEqual(str(query), 'project { id nodes { id info } }')
+        self.assertEqual(str(other), 'other { nodes { id iid } }')
+        query.update(other)
+        self.assertEqual(str(query), 'project { id nodes { info id iid } }')
+
+    def test_update_graphql_node_items_replace_with_alias(self):
+        """Node can be updated with items from other node"""
+        query = graphql.GraphQLNode('project', 'id', graphql.GraphQLNode('nodes', 'id', 'info'))
+        other = graphql.GraphQLNode('other', graphql.GraphQLNode('x', 'id', 'iid', _alias='nodes'))
+        self.assertEqual(str(query), 'project { id nodes { id info } }')
+        self.assertEqual(str(other), 'other { nodes: x { id iid } }')
+        query.update(other)
+        self.assertEqual(str(query), 'project { id nodes: x { id iid } }')
+
 
 class TestGraphQLEnums(TestCase):
     """ Unit test for GraphQL Enums
